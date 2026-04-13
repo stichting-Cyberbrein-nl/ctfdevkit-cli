@@ -299,6 +299,16 @@ func installDockerArch(ctx context.Context) error {
 func installDockerDebian(ctx context.Context, distro linuxDistro) error {
 	output.Info("Installing Docker via apt-get...")
 
+	repo, err := resolveDockerAPTRepo(distro)
+	if err != nil {
+		return err
+	}
+
+	repoSupported := validateDockerAPTRepo(repo) == nil
+	if err := removeStaleDockerAPTSource(ctx, repo, repoSupported); err != nil {
+		return err
+	}
+
 	steps := [][]string{
 		{"sudo", "apt-get", "update", "-qq"},
 		{"sudo", "apt-get", "install", "-y", "-qq",
@@ -314,10 +324,6 @@ func installDockerDebian(ctx context.Context, distro linuxDistro) error {
 		}
 	}
 
-	repo, err := resolveDockerAPTRepo(distro)
-	if err != nil {
-		return err
-	}
 	if err := validateDockerAPTRepo(repo); err != nil {
 		output.Warnf("%v; using distro packages instead.", err)
 		if distroErr := installDockerDebianPackages(ctx); distroErr == nil {
@@ -354,6 +360,47 @@ apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugi
 	}
 
 	return enableAndStartDocker(ctx)
+}
+
+func removeStaleDockerAPTSource(ctx context.Context, repo dockerAPTRepo, repoSupported bool) error {
+	supported := "0"
+	if repoSupported {
+		supported = "1"
+	}
+
+	script := `
+set -e
+expected_uri="$1"
+expected_suite="$2"
+supported="$3"
+
+for file in /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.sources; do
+    [ -f "$file" ] || continue
+    grep -q 'download.docker.com/linux' "$file" || continue
+
+    if [ "$supported" != "1" ]; then
+        rm -f "$file"
+        continue
+    fi
+
+    if grep -q "$expected_uri" "$file" && grep -q "$expected_suite" "$file"; then
+        continue
+    fi
+
+    rm -f "$file"
+done
+`
+	cmd := exec.CommandContext(ctx, "sudo", "sh", "-c", script, "sh",
+		"https://download.docker.com/linux/"+repo.OS,
+		repo.Codename,
+		supported,
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("cleaning stale Docker apt source failed: %w", err)
+	}
+	return nil
 }
 
 func installDockerDebianPackages(ctx context.Context) error {
