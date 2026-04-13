@@ -1,7 +1,7 @@
 dist/
 *.exe
-devkit
-devkit-*
+/devkit
+/devkit-*
 *.test
 *.out
 .claude/
