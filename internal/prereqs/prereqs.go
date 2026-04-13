@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/certs"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
@@ -34,7 +36,7 @@ func ensureDocker(ctx context.Context, plat platform.Platform) error {
 			return fmt.Errorf("docker installation failed: %w\n\nPlease install Docker manually: https://docs.docker.com/get-docker/", err)
 		}
 		if !docker.IsAvailable() {
-			return fmt.Errorf("docker still not found after installation — please restart your terminal")
+			return fmt.Errorf("docker still not found after installation - please restart your terminal")
 		}
 	}
 
@@ -42,7 +44,7 @@ func ensureDocker(ctx context.Context, plat platform.Platform) error {
 		output.Warn("Docker daemon is not running.")
 		_ = docker.TryLaunch(ctx)
 
-		waitCtx, cancel := context.WithTimeout(ctx, 120_000_000_000) // 120s
+		waitCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 		defer cancel()
 		if err := docker.WaitForDaemon(waitCtx); err != nil {
 			return err
@@ -69,7 +71,7 @@ func ensureMkcert(plat platform.Platform) error {
 	}
 
 	if !certs.IsMkcertInstalled() {
-		return fmt.Errorf("mkcert still not found after installation — please restart your terminal")
+		return fmt.Errorf("mkcert still not found after installation - please restart your terminal")
 	}
 
 	output.Success("mkcert installed")
@@ -82,13 +84,13 @@ func installDocker(ctx context.Context, plat platform.Platform) error {
 	switch plat.OS {
 	case platform.OSMacOS:
 		if _, err := exec.LookPath("brew"); err != nil {
-			return fmt.Errorf("homebrew not found — cannot auto-install Docker on macOS")
+			return fmt.Errorf("homebrew not found - cannot auto-install Docker on macOS")
 		}
 		return exec.CommandContext(ctx, "brew", "install", "--cask", "docker").Run()
 
 	case platform.OSWindows:
 		if _, err := exec.LookPath("winget.exe"); err != nil {
-			return fmt.Errorf("winget not found — install Docker Desktop manually: https://docs.docker.com/desktop/install/windows-install/")
+			return fmt.Errorf("winget not found - install Docker Desktop manually: https://docs.docker.com/desktop/install/windows-install/")
 		}
 		cmd := exec.CommandContext(ctx, "winget.exe", "install", "--id", "Docker.DockerDesktop", "-e", "--silent")
 		cmd.Stdout = os.Stdout
@@ -96,60 +98,159 @@ func installDocker(ctx context.Context, plat platform.Platform) error {
 		return cmd.Run()
 
 	default:
-		// Linux (including WSL)
+		// Linux, including WSL.
 		return installDockerLinux(ctx)
 	}
 }
 
 // installDockerLinux detects the distro and uses the appropriate package manager.
 func installDockerLinux(ctx context.Context) error {
-	distro := detectLinuxDistro()
-	output.Infof("Detected Linux distro: %s", distro)
+	distro := detectLinuxDistroInfo()
+	output.Infof("Detected Linux distro: %s", distro.ID)
 
-	switch distro {
-	case "arch":
+	switch {
+	case distro.ID == "arch":
 		return installDockerArch(ctx)
-	case "debian", "ubuntu", "kali", "raspbian", "linuxmint", "pop":
-		return installDockerDebian(ctx)
-	case "fedora":
+	case isDebianOrUbuntuBased(distro):
+		return installDockerDebian(ctx, distro)
+	case distro.ID == "fedora":
 		return installDockerFedora(ctx)
-	case "rhel", "centos", "rocky", "almalinux":
+	case slices.Contains([]string{"rhel", "centos", "rocky", "almalinux"}, distro.ID):
 		return installDockerRHEL(ctx)
-	case "opensuse", "sles":
+	case slices.Contains([]string{"opensuse", "sles"}, distro.ID):
 		return installDockerOpenSUSE(ctx)
 	default:
-		// Unknown distro — try the official convenience script.
+		// Unknown distro - try the official convenience script.
 		return installDockerScript(ctx)
 	}
 }
 
+type linuxDistro struct {
+	ID              string
+	IDLike          []string
+	VersionCodename string
+	UbuntuCodename  string
+}
+
 // detectLinuxDistro reads /etc/os-release to identify the distribution.
 func detectLinuxDistro() string {
+	return detectLinuxDistroInfo().ID
+}
+
+func detectLinuxDistroInfo() linuxDistro {
 	if runtime.GOOS != "linux" {
-		return "unknown"
+		return linuxDistro{ID: "unknown"}
 	}
 
 	// Arch Linux has its own release file.
 	if _, err := os.Stat("/etc/arch-release"); err == nil {
-		return "arch"
+		return linuxDistro{ID: "arch"}
 	}
 
 	data, err := os.ReadFile("/etc/os-release")
 	if err != nil {
 		// Fallback: check package managers.
-		return detectDistroByPackageManager()
+		return linuxDistro{ID: detectDistroByPackageManager()}
 	}
 
-	lower := strings.ToLower(string(data))
-	for _, line := range strings.Split(lower, "\n") {
-		if !strings.HasPrefix(line, "id=") {
+	distro := parseLinuxOSRelease(string(data))
+	if distro.ID == "" {
+		distro.ID = detectDistroByPackageManager()
+	}
+	return distro
+}
+
+func parseLinuxOSRelease(data string) linuxDistro {
+	values := map[string]string{}
+	for _, line := range strings.Split(data, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		id := strings.Trim(strings.TrimPrefix(line, "id="), `"' `)
-		return id
+
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		values[strings.ToUpper(strings.TrimSpace(key))] = strings.ToLower(strings.Trim(strings.TrimSpace(value), `"'`))
 	}
 
-	return detectDistroByPackageManager()
+	return linuxDistro{
+		ID:              values["ID"],
+		IDLike:          strings.Fields(values["ID_LIKE"]),
+		VersionCodename: values["VERSION_CODENAME"],
+		UbuntuCodename:  values["UBUNTU_CODENAME"],
+	}
+}
+
+func isDebianOrUbuntuBased(distro linuxDistro) bool {
+	if slices.Contains([]string{"debian", "ubuntu", "kali", "raspbian", "linuxmint", "pop"}, distro.ID) {
+		return true
+	}
+	return slices.Contains(distro.IDLike, "debian") || slices.Contains(distro.IDLike, "ubuntu")
+}
+
+type dockerAPTRepo struct {
+	OS       string
+	Codename string
+}
+
+func resolveDockerAPTRepo(distro linuxDistro) (dockerAPTRepo, error) {
+	switch distro.ID {
+	case "debian":
+		return dockerAPTRepo{OS: "debian", Codename: distro.VersionCodename}, nil
+	case "ubuntu":
+		return dockerAPTRepo{OS: "ubuntu", Codename: firstNonEmpty(distro.UbuntuCodename, distro.VersionCodename)}, nil
+	case "kali":
+		// Kali is rolling but Docker publishes Debian suites; Kali docs currently recommend Debian stable.
+		return dockerAPTRepo{OS: "debian", Codename: "trixie"}, nil
+	case "raspbian":
+		return dockerAPTRepo{OS: "raspbian", Codename: distro.VersionCodename}, nil
+	case "linuxmint":
+		return dockerAPTRepo{OS: "ubuntu", Codename: firstNonEmpty(distro.UbuntuCodename, distro.VersionCodename)}, nil
+	case "pop":
+		return dockerAPTRepo{OS: "ubuntu", Codename: firstNonEmpty(distro.UbuntuCodename, distro.VersionCodename)}, nil
+	}
+
+	switch {
+	case slices.Contains(distro.IDLike, "ubuntu"):
+		return dockerAPTRepo{OS: "ubuntu", Codename: firstNonEmpty(distro.UbuntuCodename, distro.VersionCodename)}, nil
+	case slices.Contains(distro.IDLike, "debian"):
+		return dockerAPTRepo{OS: "debian", Codename: distro.VersionCodename}, nil
+	default:
+		return dockerAPTRepo{}, fmt.Errorf("%s is not Debian or Ubuntu based", distro.ID)
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func validateDockerAPTRepo(repo dockerAPTRepo) error {
+	if repo.OS == "" || repo.Codename == "" {
+		return fmt.Errorf("could not determine Docker apt repository for this distro")
+	}
+
+	switch repo.OS {
+	case "debian":
+		if slices.Contains([]string{"bullseye", "bookworm", "trixie"}, repo.Codename) {
+			return nil
+		}
+	case "ubuntu":
+		if slices.Contains([]string{"jammy", "noble", "questing", "resolute"}, repo.Codename) {
+			return nil
+		}
+	case "raspbian":
+		if slices.Contains([]string{"bullseye", "bookworm"}, repo.Codename) {
+			return nil
+		}
+	}
+	return fmt.Errorf("Docker does not publish an apt repository for %s %s", repo.OS, repo.Codename)
 }
 
 // detectDistroByPackageManager is a fallback when /etc/os-release is absent.
@@ -194,8 +295,8 @@ func installDockerArch(ctx context.Context) error {
 	return enableAndStartDocker(ctx)
 }
 
-// installDockerDebian installs Docker on Debian / Ubuntu / Kali via apt-get.
-func installDockerDebian(ctx context.Context) error {
+// installDockerDebian installs Docker on Debian / Ubuntu based distributions via apt-get.
+func installDockerDebian(ctx context.Context, distro linuxDistro) error {
 	output.Info("Installing Docker via apt-get...")
 
 	steps := [][]string{
@@ -213,27 +314,61 @@ func installDockerDebian(ctx context.Context) error {
 		}
 	}
 
-	// Add Docker's official GPG key and repository, then install.
-	script := `
+	repo, err := resolveDockerAPTRepo(distro)
+	if err != nil {
+		return err
+	}
+	if err := validateDockerAPTRepo(repo); err != nil {
+		output.Warnf("%v; using distro packages instead.", err)
+		if distroErr := installDockerDebianPackages(ctx); distroErr == nil {
+			return nil
+		}
+		output.Warn("Distro package install failed, trying convenience script...")
+		return installDockerScript(ctx)
+	}
+	output.Infof("Using Docker apt repository: %s %s", repo.OS, repo.Codename)
+
+	script := fmt.Sprintf(`
 set -e
 install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg \
+curl -fsSL https://download.docker.com/linux/%s/gpg \
     | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-    https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") \
-    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    https://download.docker.com/linux/%s \
+    %s stable" \
     | tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update -qq
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-`
+`, repo.OS, repo.OS, repo.Codename)
 	cmd := exec.CommandContext(ctx, "sudo", "sh", "-c", script)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		// Fall back to get.docker.com script.
-		output.Warn("Official repo install failed, trying convenience script...")
+		output.Warn("Official repo install failed, trying distro packages...")
+		if distroErr := installDockerDebianPackages(ctx); distroErr == nil {
+			return nil
+		}
+		output.Warn("Distro package install failed, trying convenience script...")
 		return installDockerScript(ctx)
+	}
+
+	return enableAndStartDocker(ctx)
+}
+
+func installDockerDebianPackages(ctx context.Context) error {
+	steps := [][]string{
+		{"sudo", "apt-get", "update", "-qq"},
+		{"sudo", "apt-get", "install", "-y", "-qq", "docker.io", "docker-compose-plugin"},
+	}
+
+	for _, args := range steps {
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("%s failed: %w", strings.Join(args, " "), err)
+		}
 	}
 
 	return enableAndStartDocker(ctx)
@@ -318,7 +453,7 @@ func installDockerOpenSUSE(ctx context.Context) error {
 // last resort for unknown distributions.
 func installDockerScript(ctx context.Context) error {
 	if _, err := exec.LookPath("curl"); err != nil {
-		return fmt.Errorf("curl is required for auto-install on this distro — install Docker manually: https://docs.docker.com/get-docker/")
+		return fmt.Errorf("curl is required for auto-install on this distro - install Docker manually: https://docs.docker.com/get-docker/")
 	}
 
 	output.Info("Installing Docker via official convenience script (get.docker.com)...")
@@ -343,7 +478,7 @@ func enableAndStartDocker(ctx context.Context) error {
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		_ = cmd.Run() // non-fatal — systemctl may not exist (e.g. inside Docker)
+		_ = cmd.Run() // non-fatal - systemctl may not exist, e.g. inside Docker.
 	}
 
 	// Add current user to the docker group so sudo is not required for every command.
@@ -352,7 +487,7 @@ func enableAndStartDocker(ctx context.Context) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err == nil {
-			output.Hint("Added to docker group — log out and back in (or run: newgrp docker) for this to take effect.")
+			output.Hint("Added to docker group - log out and back in (or run: newgrp docker) for this to take effect.")
 		}
 	}
 
