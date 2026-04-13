@@ -41,12 +41,19 @@ func ensureDocker(ctx context.Context, plat platform.Platform) error {
 	}
 
 	if !docker.IsRunning(ctx) {
+		if err := ensureDockerSocketAccess(ctx); err != nil {
+			return err
+		}
+
 		output.Warn("Docker daemon is not running.")
 		_ = docker.TryLaunch(ctx)
 
 		waitCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 		defer cancel()
 		if err := docker.WaitForDaemon(waitCtx); err != nil {
+			if accessErr := ensureDockerSocketAccess(ctx); accessErr != nil {
+				return accessErr
+			}
 			return err
 		}
 	}
@@ -57,6 +64,23 @@ func ensureDocker(ctx context.Context, plat platform.Platform) error {
 
 	output.Success("Docker is ready")
 	return nil
+}
+
+func ensureDockerSocketAccess(ctx context.Context) error {
+	out, err := docker.Info(ctx)
+	if err == nil || !docker.IsPermissionError(out) {
+		return nil
+	}
+
+	user := os.Getenv("USER")
+	if user == "" {
+		user = "the current user"
+	}
+	if addCurrentUserToDockerGroup(ctx) {
+		return fmt.Errorf("Docker is running, but %s cannot access /var/run/docker.sock yet - run `newgrp docker` or open a new terminal, then run devkit again", user)
+	}
+
+	return fmt.Errorf("Docker is running, but the current user cannot access /var/run/docker.sock - add the user to the docker group or run Docker with proper permissions")
 }
 
 func ensureMkcert(plat platform.Platform) error {
@@ -528,15 +552,20 @@ func enableAndStartDocker(ctx context.Context) error {
 		_ = cmd.Run() // non-fatal - systemctl may not exist, e.g. inside Docker.
 	}
 
-	// Add current user to the docker group so sudo is not required for every command.
+	addCurrentUserToDockerGroup(ctx)
+
+	return nil
+}
+
+func addCurrentUserToDockerGroup(ctx context.Context) bool {
 	if user := os.Getenv("USER"); user != "" && user != "root" {
 		cmd := exec.CommandContext(ctx, "sudo", "usermod", "-aG", "docker", user)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err == nil {
 			output.Hint("Added to docker group - log out and back in (or run: newgrp docker) for this to take effect.")
+			return true
 		}
 	}
-
-	return nil
+	return false
 }

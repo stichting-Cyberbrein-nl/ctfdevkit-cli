@@ -28,8 +28,24 @@ func HasComposePlugin(ctx context.Context) bool {
 
 // IsRunning returns true if the Docker daemon is responding.
 func IsRunning(ctx context.Context) bool {
+	_, err := Info(ctx)
+	return err == nil
+}
+
+// Info runs `docker info` and returns combined output so callers can distinguish
+// daemon startup problems from socket permission problems.
+func Info(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "docker", "info")
-	return cmd.Run() == nil
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// IsPermissionError reports whether docker output indicates the current user
+// cannot access the Docker daemon socket.
+func IsPermissionError(infoOutput string) bool {
+	lower := strings.ToLower(infoOutput)
+	return strings.Contains(lower, "permission denied") &&
+		(strings.Contains(lower, "docker.sock") || strings.Contains(lower, "/var/run/docker"))
 }
 
 // WaitForDaemon polls the Docker daemon until it responds or the context expires.
@@ -41,10 +57,14 @@ func WaitForDaemon(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for Docker daemon — is Docker Desktop running?")
+			return fmt.Errorf("timed out waiting for Docker daemon - is the Docker service running?")
 		case <-ticker.C:
-			if IsRunning(ctx) {
+			out, err := Info(ctx)
+			if err == nil {
 				return nil
+			}
+			if IsPermissionError(out) {
+				return fmt.Errorf("Docker daemon is running, but the current user cannot access /var/run/docker.sock")
 			}
 		}
 	}
@@ -70,8 +90,23 @@ func TryLaunch(ctx context.Context) error {
 		}
 		exe := filepath.Join(progFiles, "Docker", "Docker", "Docker Desktop.exe")
 		return exec.CommandContext(ctx, exe).Start()
+	case "linux":
+		output.Info("Starting Docker service...")
+		for _, args := range [][]string{
+			{"sudo", "systemctl", "start", "docker"},
+			{"sudo", "service", "docker", "start"},
+			{"sudo", "/etc/init.d/docker", "start"},
+		} {
+			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("could not start Docker service automatically")
 	default:
-		return fmt.Errorf("cannot auto-start Docker on this platform — please start it manually")
+		return fmt.Errorf("cannot auto-start Docker on this platform - please start it manually")
 	}
 }
 
@@ -128,7 +163,7 @@ func MaybeFreeSpace(ctx context.Context) error {
 		return nil
 	}
 
-	output.Warnf("Disk is %d%% full — running Docker cleanup to free space...", pct)
+	output.Warnf("Disk is %d%% full - running Docker cleanup to free space...", pct)
 	if err := SystemPrune(ctx); err != nil {
 		return fmt.Errorf("docker cleanup failed: %w", err)
 	}
