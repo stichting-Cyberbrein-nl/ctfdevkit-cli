@@ -1,10 +1,11 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs the devkit CLI for Windows.
+    Cyberbrein DevKit — Windows Installer
 .DESCRIPTION
-    Downloads the latest devkit binary from GitHub Releases, verifies the checksum,
-    and installs it to $env:LOCALAPPDATA\devkit\ (added to the user's PATH).
+    Downloads the latest devkit binary from GitHub Releases, verifies the
+    checksum, installs it to %LOCALAPPDATA%\devkit\ and adds that directory
+    to your user PATH so you can run 'devkit' from any terminal.
 .EXAMPLE
     irm https://raw.githubusercontent.com/stichting-Cyberbrein-nl/ctfdevkit-cli/main/scripts/install.ps1 | iex
 #>
@@ -12,101 +13,145 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Repo    = "stichting-Cyberbrein-nl/ctfdevkit-cli"
-$Binary  = "devkit.exe"
-$InstDir = Join-Path $env:LOCALAPPDATA "devkit"
+$Repo    = 'stichting-Cyberbrein-nl/ctfdevkit-cli'
+$Binary  = 'devkit.exe'
+$InstDir = Join-Path $env:LOCALAPPDATA 'devkit'
 
-function Write-Info    { param($m) Write-Host "  ● $m" -ForegroundColor Cyan }
-function Write-Success { param($m) Write-Host "  ✓ $m" -ForegroundColor Green }
-function Write-Warn    { param($m) Write-Host "  ⚠ $m" -ForegroundColor Yellow }
-function Write-Fail    { param($m) Write-Error "  ✗ $m" }
+# ── Helpers ───────────────────────────────────────────────────────────────────
+function Write-Info { param($m) Write-Host "  > $m" -ForegroundColor Cyan    }
+function Write-Ok   { param($m) Write-Host "  v $m" -ForegroundColor Green   }
+function Write-Warn { param($m) Write-Host "  ! $m" -ForegroundColor Yellow  }
+function Write-Fail { param($m) Write-Error "  x $m"                         }
 
+# ── Banner ────────────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "  ██████╗ ███████╗██╗   ██╗██╗  ██╗██╗████████╗" -ForegroundColor Cyan
+Write-Host "  ██╔══██╗██╔════╝██║   ██║██║ ██╔╝██║╚══██╔══╝" -ForegroundColor Cyan
+Write-Host "  ██║  ██║█████╗  ██║   ██║█████╔╝ ██║   ██║   " -ForegroundColor Cyan
+Write-Host "  ██║  ██║██╔══╝  ╚██╗ ██╔╝██╔═██╗ ██║   ██║   " -ForegroundColor Cyan
+Write-Host "  ██████╔╝███████╗ ╚████╔╝ ██║  ██╗██║   ██║   " -ForegroundColor Cyan
+Write-Host "  ╚═════╝ ╚══════╝  ╚═══╝  ╚═╝  ╚═╝╚═╝   ╚═╝   " -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Cyberbrein DevKit — Windows Installer" -ForegroundColor White
+Write-Host ""
+
+# ── Latest version ────────────────────────────────────────────────────────────
 function Get-LatestVersion {
-    $url  = "https://api.github.com/repos/$Repo/releases/latest"
-    $resp = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'devkit-installer' }
+    $resp = Invoke-RestMethod `
+        -Uri     "https://api.github.com/repos/$Repo/releases/latest" `
+        -Headers @{ 'User-Agent' = 'devkit-installer' }
     return $resp.tag_name.TrimStart('v')
 }
 
-function Get-FileHash256 {
-    param([string]$Path)
+# ── SHA256 helper ─────────────────────────────────────────────────────────────
+function Get-Sha256([string]$Path) {
     return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLower()
 }
 
-function Install-Devkit {
-    Write-Host ""
-    Write-Host "  ██████╗ ███████╗██╗   ██╗██╗  ██╗██╗████████╗" -ForegroundColor Cyan
-    Write-Host "  ██╔══██╗██╔════╝██║   ██║██║ ██╔╝██║╚══██╔══╝" -ForegroundColor Cyan
-    Write-Host "  ██║  ██║█████╗  ██║   ██║█████╔╝ ██║   ██║   " -ForegroundColor Cyan
-    Write-Host "  ██║  ██║██╔══╝  ╚██╗ ██╔╝██╔═██╗ ██║   ██║   " -ForegroundColor Cyan
-    Write-Host "  ██████╔╝███████╗ ╚████╔╝ ██║  ██╗██║   ██║   " -ForegroundColor Cyan
-    Write-Host "  ╚═════╝ ╚══════╝  ╚═══╝  ╚═╝  ╚═╝╚═╝   ╚═╝   " -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  Cyberbrein DevKit Installer for Windows"
-    Write-Host ""
+# ── Add directory to user PATH (no admin required) ────────────────────────────
+function Add-ToUserPath([string]$Dir) {
+    $current = [System.Environment]::GetEnvironmentVariable('PATH', 'User') ?? ''
+    $parts   = $current -split ';' | Where-Object { $_ -ne '' }
 
-    $version = Get-LatestVersion
-    Write-Info "Version:      v$version"
+    if ($parts -contains $Dir) {
+        Write-Ok "$Dir is already in your PATH"
+        return $false
+    }
+
+    $newPath = ($parts + $Dir) -join ';'
+    [System.Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+
+    # Also apply to the current session immediately.
+    $env:PATH = ($env:PATH.TrimEnd(';') + ";$Dir")
+    return $true
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+function Install-Devkit {
+    Write-Info "Fetching latest version..."
+    $Version = Get-LatestVersion
+    $Tag     = "v$Version"
+
+    Write-Info "Version:      $Tag"
     Write-Info "Installing to: $InstDir"
     Write-Host ""
 
-    $baseUrl     = "https://github.com/$Repo/releases/download/v$version"
-    $archiveName = "devkit-windows-amd64.zip"
-    $archiveUrl  = "$baseUrl/$archiveName"
-    $checksumUrl = "$baseUrl/checksums.txt"
+    $BaseUrl     = "https://github.com/$Repo/releases/download/$Tag"
+    $ArchiveName = 'devkit-windows-amd64.zip'
+    $ArchiveUrl  = "$BaseUrl/$ArchiveName"
+    $ChecksumUrl = "$BaseUrl/checksums.txt"
 
-    $tmpDir = Join-Path $env:TEMP "devkit-install-$([System.IO.Path]::GetRandomFileName())"
-    New-Item -ItemType Directory -Path $tmpDir | Out-Null
+    # Temp directory
+    $TmpDir = Join-Path $env:TEMP "devkit-install-$([System.IO.Path]::GetRandomFileName())"
+    New-Item -ItemType Directory -Path $TmpDir | Out-Null
 
     try {
-        # Download archive.
-        Write-Info "Downloading $archiveName..."
-        $archivePath = Join-Path $tmpDir $archiveName
-        Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing
+        # ── Download ──────────────────────────────────────────────────────────
+        Write-Info "Downloading $ArchiveName..."
+        $ArchivePath  = Join-Path $TmpDir $ArchiveName
+        $ChecksumPath = Join-Path $TmpDir 'checksums.txt'
 
-        # Download + verify checksum.
+        Invoke-WebRequest -Uri $ArchiveUrl  -OutFile $ArchivePath  -UseBasicParsing
+        Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumPath -UseBasicParsing
+
+        # ── Checksum verification ─────────────────────────────────────────────
         Write-Info "Verifying checksum..."
-        $checksumPath = Join-Path $tmpDir "checksums.txt"
-        Invoke-WebRequest -Uri $checksumUrl -OutFile $checksumPath -UseBasicParsing
+        $Actual       = Get-Sha256 $ArchivePath
+        $ExpectedLine = Get-Content $ChecksumPath |
+                        Where-Object { $_ -match [regex]::Escape($ArchiveName) }
 
-        $actualHash   = Get-FileHash256 $archivePath
-        $expectedLine = Get-Content $checksumPath | Where-Object { $_ -match $archiveName }
-        if (-not $expectedLine) {
-            Write-Fail "Could not find checksum for $archiveName in checksums.txt"
-            return
+        if (-not $ExpectedLine) {
+            Write-Fail "No checksum found for $ArchiveName in checksums.txt"
         }
-        $expectedHash = ($expectedLine -split '\s+')[0].ToLower()
 
-        if ($actualHash -ne $expectedHash) {
-            Write-Fail "Checksum mismatch: expected $expectedHash, got $actualHash"
-            return
+        $Expected = ($ExpectedLine -split '\s+')[0].ToLower()
+
+        if ($Actual -ne $Expected) {
+            Write-Fail "Checksum mismatch!`n  Expected: $Expected`n  Got:      $Actual"
         }
-        Write-Success "Checksum verified"
+        Write-Ok "Checksum verified"
 
-        # Extract.
+        # ── Extract ───────────────────────────────────────────────────────────
         Write-Info "Extracting..."
-        Expand-Archive -Path $archivePath -DestinationPath $tmpDir -Force
+        Expand-Archive -Path $ArchivePath -DestinationPath $TmpDir -Force
 
-        # Install.
+        # ── Install ───────────────────────────────────────────────────────────
         New-Item -ItemType Directory -Path $InstDir -Force | Out-Null
-        Copy-Item -Path (Join-Path $tmpDir $Binary) -Destination (Join-Path $InstDir $Binary) -Force
+        $Dest = Join-Path $InstDir $Binary
+        Copy-Item -Path (Join-Path $TmpDir $Binary) -Destination $Dest -Force
+        Write-Ok "devkit v$Version installed at $Dest"
 
-        # Add to user PATH if not already present.
-        $userPath = [System.Environment]::GetEnvironmentVariable('PATH', 'User')
-        if ($userPath -notlike "*$InstDir*") {
-            [System.Environment]::SetEnvironmentVariable('PATH', "$userPath;$InstDir", 'User')
-            Write-Info "Added $InstDir to your PATH"
-            Write-Warn "Restart your terminal for PATH changes to take effect."
+        # ── PATH ──────────────────────────────────────────────────────────────
+        Write-Info "Updating PATH..."
+        $Added = Add-ToUserPath -Dir $InstDir
+        if ($Added) {
+            Write-Ok "$InstDir added to your user PATH"
+            Write-Warn "Open a new terminal window to use 'devkit' from anywhere."
         }
 
+        # ── Smoke test ────────────────────────────────────────────────────────
+        try {
+            $Ver = & $Dest version 2>$null
+            Write-Ok "Smoke test passed: $Ver"
+        } catch { }
+
+        # ── Done ──────────────────────────────────────────────────────────────
         Write-Host ""
-        Write-Success "devkit v$version installed to $InstDir\$Binary"
+        Write-Host "  +--------------------------------------------+" -ForegroundColor Green
+        Write-Host "  |  Get started:                              |" -ForegroundColor Green
+        Write-Host "  |    devkit setup                            |" -ForegroundColor Green
+        Write-Host "  |    devkit up                               |" -ForegroundColor Green
+        Write-Host "  |                                            |" -ForegroundColor Green
+        Write-Host "  |  Update later:                             |" -ForegroundColor Green
+        Write-Host "  |    devkit self-update                      |" -ForegroundColor Green
+        Write-Host "  +--------------------------------------------+" -ForegroundColor Green
         Write-Host ""
-        Write-Host "  Get started:"
-        Write-Host "    devkit setup"
+        Write-Warn "Tip: 'devkit setup' needs Administrator rights for TLS certificates."
+        Write-Warn "     Right-click PowerShell > 'Run as Administrator' for the first setup."
         Write-Host ""
 
     } finally {
-        Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
     }
 }
 

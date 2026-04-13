@@ -27,7 +27,7 @@ builds:
 
 archives:
   - id: devkit
-    builds: [devkit]
+    ids: [devkit]
     # Produces: devkit-linux-amd64.tar.gz, devkit-windows-amd64.zip, etc.
     name_template: "devkit-{{ .Os }}-{{ .Arch }}"
     format_overrides:
