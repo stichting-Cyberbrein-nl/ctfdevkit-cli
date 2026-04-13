@@ -46,7 +46,7 @@ func InstallMkcert(plat platform.Platform) error {
 func installMkcertLinux() error {
 	// Try package managers first.
 	if _, err := exec.LookPath("apt-get"); err == nil {
-		cmd := exec.Command("sudo", "apt-get", "install", "-y", "mkcert")
+		cmd := exec.Command("sudo", "apt-get", "install", "-y", "mkcert", "libnss3-tools")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
@@ -55,6 +55,28 @@ func installMkcertLinux() error {
 		return exec.Command("brew", "install", "mkcert").Run()
 	}
 	return fmt.Errorf("could not auto-install mkcert — please install it manually: https://github.com/FiloSottile/mkcert")
+}
+
+// EnsureTrustStoreTools installs helper tools needed by mkcert to trust the CA
+// in browser-specific stores such as Firefox NSS profiles.
+func EnsureTrustStoreTools(plat platform.Platform) error {
+	if plat.OS != platform.OSLinux && plat.OS != platform.OSWSL {
+		return nil
+	}
+	if _, err := exec.LookPath("certutil"); err == nil {
+		return nil
+	}
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		output.Info("Installing Firefox certificate trust helper (libnss3-tools)...")
+		cmd := exec.Command("sudo", "apt-get", "install", "-y", "libnss3-tools")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
+	output.Hint("Firefox may reject local HTTPS until NSS certutil is installed.")
+	output.Hint("Debian/Ubuntu/Kali: sudo apt-get install -y libnss3-tools")
+	return nil
 }
 
 // HasValidCert checks if a PEM cert file exists and is valid for the given domain
@@ -94,13 +116,12 @@ func Generate(certDir, domain, bindIP string, force bool, plat platform.Platform
 	certFile := filepath.Join(certDir, domain+".pem")
 	keyFile := filepath.Join(certDir, domain+"-key.pem")
 
-	if !force && HasValidCert(certFile, domain) {
-		output.Successf("TLS certificate already valid for %s", domain)
-		return nil
-	}
-
 	if err := os.MkdirAll(certDir, 0755); err != nil {
 		return fmt.Errorf("creating cert dir: %w", err)
+	}
+
+	if err := EnsureTrustStoreTools(plat); err != nil {
+		return fmt.Errorf("installing certificate trust helpers: %w", err)
 	}
 
 	// Install the mkcert CA into the system trust store.
@@ -114,6 +135,11 @@ func Generate(certDir, domain, bindIP string, force bool, plat platform.Platform
 			output.Hint("On Windows, mkcert -install requires Administrator privileges.")
 			output.Hint("Re-run this command in an elevated terminal (Run as Administrator) to trust the certificate.")
 		}
+	}
+
+	if !force && HasValidCert(certFile, domain) {
+		output.Successf("TLS certificate already valid for %s", domain)
+		return nil
 	}
 
 	// Build the list of SANs.

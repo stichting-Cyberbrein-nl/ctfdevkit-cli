@@ -100,6 +100,9 @@ Als je twijfelt: herstart de pc met: sudo reboot`)
 
 func ensureMkcert(plat platform.Platform) error {
 	if certs.IsMkcertInstalled() {
+		if err := certs.EnsureTrustStoreTools(plat); err != nil {
+			return fmt.Errorf("certificate trust helper installation failed: %w", err)
+		}
 		output.Success("mkcert is installed")
 		return nil
 	}
@@ -111,6 +114,9 @@ func ensureMkcert(plat platform.Platform) error {
 
 	if !certs.IsMkcertInstalled() {
 		return fmt.Errorf("mkcert still not found after installation - please restart your terminal")
+	}
+	if err := certs.EnsureTrustStoreTools(plat); err != nil {
+		return fmt.Errorf("certificate trust helper installation failed: %w", err)
 	}
 
 	output.Success("mkcert installed")
