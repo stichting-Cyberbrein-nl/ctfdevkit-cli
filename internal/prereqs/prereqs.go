@@ -76,11 +76,30 @@ func ensureDockerSocketAccess(ctx context.Context) error {
 	if user == "" {
 		user = "the current user"
 	}
-	if addCurrentUserToDockerGroup(ctx) {
-		return fmt.Errorf("Docker is running, but %s cannot access /var/run/docker.sock yet - run `newgrp docker` or open a new terminal, then run devkit again", user)
+
+	return dockerSocketAccessError(user, addCurrentUserToDockerGroup(ctx))
+}
+
+func dockerSocketAccessError(user string, addedToGroup bool) error {
+	if addedToGroup {
+		return fmt.Errorf(`Docker draait, maar deze terminal heeft nog geen toegang tot Docker.
+Dit is normaal direct nadat DevKit de gebruiker "%s" aan de docker groep heeft toegevoegd.
+
+Kies een van deze opties:
+1. Snelste optie: voer uit: newgrp docker
+2. Makkelijkste optie: sluit deze terminal en open een nieuwe terminal
+3. Als je twijfelt: herstart de pc met: sudo reboot
+
+Daarna opnieuw starten met: devkit`, user)
 	}
 
-	return fmt.Errorf("Docker is running, but the current user cannot access /var/run/docker.sock - add the user to the docker group or run Docker with proper permissions")
+	return fmt.Errorf(`Docker draait, maar deze gebruiker heeft geen toegang tot Docker.
+Los dit op met:
+  sudo usermod -aG docker $USER
+  newgrp docker
+  devkit
+
+Als je twijfelt: herstart de pc met: sudo reboot`)
 }
 
 func ensureMkcert(plat platform.Platform) error {
@@ -563,7 +582,7 @@ func addCurrentUserToDockerGroup(ctx context.Context) bool {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err == nil {
-			output.Hint("Added to docker group - log out and back in (or run: newgrp docker) for this to take effect.")
+			output.Hint("Gebruiker toegevoegd aan docker groep. Activeer dit met: newgrp docker, een nieuwe terminal, of sudo reboot.")
 			return true
 		}
 	}

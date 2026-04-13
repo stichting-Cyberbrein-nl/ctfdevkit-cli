@@ -1,6 +1,9 @@
 package prereqs
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseLinuxOSRelease(t *testing.T) {
 	distro := parseLinuxOSRelease(`
@@ -78,5 +81,14 @@ func TestValidateDockerAPTRepoRejectsUnsupportedSuite(t *testing.T) {
 	err := validateDockerAPTRepo(dockerAPTRepo{OS: "debian", Codename: "kali-rolling"})
 	if err == nil {
 		t.Fatal("validateDockerAPTRepo() error = nil, want unsupported suite error")
+	}
+}
+
+func TestDockerSocketAccessErrorGivesDutchRecoverySteps(t *testing.T) {
+	msg := dockerSocketAccessError("kali", true).Error()
+	for _, want := range []string{"newgrp docker", "nieuwe terminal", "sudo reboot", "devkit"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("dockerSocketAccessError() missing %q in %q", want, msg)
+		}
 	}
 }
