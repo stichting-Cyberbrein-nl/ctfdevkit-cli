@@ -11,8 +11,10 @@ import (
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/platform"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/releases"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/state"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/tui"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/update"
 )
 
 // Version is set at build time via -ldflags.
@@ -28,6 +30,14 @@ var rootCmd = &cobra.Command{
 		cfg := configFrom(ctx)
 		s := stateFrom(ctx)
 
+		updated, err := requireCLIUpdateIfAvailable(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		if updated {
+			return nil
+		}
+
 		// Resolve the compose directory if payload is installed.
 		composeDir := ""
 		if s.IsPayloadInstalled() {
@@ -40,6 +50,40 @@ var rootCmd = &cobra.Command{
 	},
 	SilenceUsage:  true,
 	SilenceErrors: true,
+}
+
+func requireCLIUpdateIfAvailable(ctx context.Context, cfg config.Config) (bool, error) {
+	if Version == "" || Version == "dev" {
+		return false, nil
+	}
+
+	manifest, err := releases.Fetch(ctx, cfg.ManifestURL)
+	if err != nil {
+		output.Hintf("Kon update-check niet uitvoeren: %v", err)
+		return false, nil
+	}
+
+	newer, err := manifest.IsNewerCLI(Version)
+	if err != nil {
+		output.Hintf("Kon update-versie niet vergelijken: %v", err)
+		return false, nil
+	}
+	if !newer {
+		return false, nil
+	}
+
+	accepted, err := tui.AskRequiredUpdate(Version, manifest.CLI.Version)
+	if err != nil {
+		return false, err
+	}
+	if !accepted {
+		return false, fmt.Errorf("update verplicht: run `devkit self-update` en start DevKit daarna opnieuw")
+	}
+
+	if err := update.SelfUpdate(ctx, manifest, Version, platformFrom(ctx)); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Execute is the entrypoint called from main.

@@ -16,34 +16,34 @@ import (
 
 // item represents one row in the menu.
 type item struct {
-	icon     string
-	label    string
-	desc     string
-	cmd      string   // devkit subcommand to run, "" = separator
-	args     []string // extra args for the subcommand
-	danger   bool     // shown in red
+	icon   string
+	label  string
+	desc   string
+	cmd    string   // devkit subcommand to run, "" = separator
+	args   []string // extra args for the subcommand
+	danger bool     // shown in red
 }
 
 var menuItems = []item{
-	{icon: "⚡", label: "Setup environment",    desc: "Install payload, certs, hosts, start containers", cmd: "setup"},
-	{icon: "▶", label: "Start (up)",            desc: "Start all containers",                           cmd: "up"},
-	{icon: "■", label: "Stop (down)",           desc: "Stop all containers",                            cmd: "down"},
+	{icon: "⚡", label: "Setup environment", desc: "Install payload, certs, hosts, start containers", cmd: "setup"},
+	{icon: "▶", label: "Start (up)", desc: "Start all containers", cmd: "up"},
+	{icon: "■", label: "Stop (down)", desc: "Stop all containers", cmd: "down"},
 	{icon: "", label: "", desc: ""}, // separator
-	{icon: "♥", label: "Health check",          desc: "Run devkit:doctor inside the app container",     cmd: "doctor"},
-	{icon: "≡", label: "View logs",             desc: "Stream live container logs",                     cmd: "logs"},
-	{icon: "◉", label: "Status",                desc: "Show container status + health check",           cmd: "status"},
-	{icon: "🌐", label: "Open in browser",      desc: "Open " + "https://ctf.dev" + " in your browser", cmd: "open"},
+	{icon: "♥", label: "Health check", desc: "Run devkit:doctor inside the app container", cmd: "doctor"},
+	{icon: "≡", label: "View logs", desc: "Stream live container logs", cmd: "logs"},
+	{icon: "◉", label: "Status", desc: "Show container status + health check", cmd: "status"},
+	{icon: "🌐", label: "Open in browser", desc: "Open " + "https://ctf.dev" + " in your browser", cmd: "open"},
 	{icon: "", label: "", desc: ""}, // separator
-	{icon: "$", label: "Shell",                 desc: "Interactive shell in the app container",         cmd: "shell"},
-	{icon: ">", label: "Artisan",               desc: "Run php artisan <command> in container",         cmd: "artisan"},
-	{icon: "+", label: "Scaffold assignment",   desc: "Create a new CTF assignment skeleton",           cmd: "scaffold"},
-	{icon: "📁", label: "Set assignments path",  desc: "Change where your CTF assignments are stored",   cmd: "config-assignments"},
+	{icon: "$", label: "Shell", desc: "Interactive shell in the app container", cmd: "shell"},
+	{icon: ">", label: "Artisan", desc: "Run php artisan <command> in container", cmd: "artisan"},
+	{icon: "+", label: "Scaffold assignment", desc: "Create a new CTF assignment skeleton", cmd: "scaffold"},
+	{icon: "📁", label: "Set assignments path", desc: "Change where your CTF assignments are stored", cmd: "config-assignments"},
 	{icon: "", label: "", desc: ""}, // separator
-	{icon: "↑", label: "Update payload",        desc: "Pull latest Docker image from Docker Hub",       cmd: "update"},
-	{icon: "↑", label: "Update CLI",            desc: "Self-update the devkit binary",                  cmd: "self-update"},
+	{icon: "↑", label: "Update payload", desc: "Pull latest Docker image from Docker Hub", cmd: "update"},
+	{icon: "↑", label: "Update CLI", desc: "Self-update the devkit binary", cmd: "self-update"},
 	{icon: "", label: "", desc: ""}, // separator
-	{icon: "✕", label: "Prune Docker",          desc: "Remove ALL unused Docker data",                  cmd: "prune", danger: true},
-	{icon: "↺", label: "Reset environment",     desc: "Stop containers + delete all volumes",           cmd: "reset",  danger: true},
+	{icon: "✕", label: "Prune Docker", desc: "Remove ALL unused Docker data", cmd: "prune", danger: true},
+	{icon: "↺", label: "Reset environment", desc: "Stop containers + delete all volumes", cmd: "reset", danger: true},
 }
 
 // Model is the Bubble Tea model for the main menu.
@@ -55,7 +55,7 @@ type Model struct {
 	status     EnvStatus
 	composeDir string
 	quitting   bool
-	runCmd     string   // set when user selects an item
+	runCmd     string // set when user selects an item
 	runArgs    []string
 	width      int
 	height     int
@@ -159,6 +159,7 @@ func (m Model) View() string {
 
 	// Brand line
 	b.WriteString(styleBold.Render("  "+m.cfg.Brand+" DevKit") + "  " + styleMuted.Render("v"+m.version) + "\n")
+	b.WriteString(styleMuted.Render("  Ontwikkeld door Olivier Flentge in opdracht van Cyberbrein B.V. (KvK 97562912)") + "\n")
 
 	// Status pill
 	b.WriteString("  " + m.status.Label())
@@ -186,11 +187,11 @@ func (m Model) View() string {
 		}
 
 		label := it.label
-		desc  := it.desc
+		desc := it.desc
 
 		if selected {
 			labelStr := fmt.Sprintf(" %s  %-28s", icon, label)
-			descStr  := styleMuted.Render(desc)
+			descStr := styleMuted.Render(desc)
 			row := styleItemSelected.Width(panelWidth - 2).Render(labelStr)
 			rows = append(rows, row)
 			_ = descStr
@@ -255,7 +256,7 @@ func Run(ctx context.Context, cfg config.Config, st state.State, version, compos
 
 	// For commands that need a prompt (scaffold, artisan), drop to plain terminal.
 	cmd := exec.CommandContext(ctx, self, args...)
-	cmd.Stdin  = os.Stdin
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

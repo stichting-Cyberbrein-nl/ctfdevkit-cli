@@ -10,13 +10,13 @@ import (
 )
 
 var (
-	bold    = color.New(color.Bold)
-	red     = color.New(color.FgRed, color.Bold)
-	green   = color.New(color.FgGreen, color.Bold)
-	yellow  = color.New(color.FgYellow, color.Bold)
-	blue    = color.New(color.FgBlue, color.Bold)
-	cyan    = color.New(color.FgCyan, color.Bold)
-	faint   = color.New(color.Faint)
+	bold   = color.New(color.Bold)
+	red    = color.New(color.FgRed, color.Bold)
+	green  = color.New(color.FgGreen, color.Bold)
+	yellow = color.New(color.FgYellow, color.Bold)
+	blue   = color.New(color.FgBlue, color.Bold)
+	cyan   = color.New(color.FgCyan, color.Bold)
+	faint  = color.New(color.Faint)
 )
 
 func init() {
@@ -37,6 +37,7 @@ func Banner(brand, version string) {
 	fmt.Println()
 	bold.Printf("  %s DevKit  ", brand)
 	faint.Printf("v%s\n", version)
+	faint.Println("  Ontwikkeld door Olivier Flentge in opdracht van Cyberbrein B.V. (KvK 97562912)")
 	fmt.Println()
 }
 
