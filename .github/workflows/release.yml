@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use a PAT or the default GITHUB_TOKEN — both work for push back to main.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Update manifest.json with the new version + checksums from the release.
+      - name: Update manifest.json
+        run: |
+          set -euo pipefail
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}"
+          CHECKSUMS="dist/checksums.txt"
+
+          get_sha() { grep "$1" "$CHECKSUMS" | awk '{print $1}'; }
+
+          jq \
+            --arg version  "$VERSION" \
+            --arg lu  "$BASE/devkit-linux-amd64.tar.gz"   \
+            --arg lus "$(get_sha devkit-linux-amd64.tar.gz)"  \
+            --arg la  "$BASE/devkit-linux-arm64.tar.gz"   \
+            --arg las "$(get_sha devkit-linux-arm64.tar.gz)"  \
+            --arg du  "$BASE/devkit-darwin-amd64.tar.gz"  \
+            --arg dus "$(get_sha devkit-darwin-amd64.tar.gz)" \
+            --arg da  "$BASE/devkit-darwin-arm64.tar.gz"  \
+            --arg das "$(get_sha devkit-darwin-arm64.tar.gz)" \
+            --arg wu  "$BASE/devkit-windows-amd64.zip"    \
+            --arg wus "$(get_sha devkit-windows-amd64.zip)"   \
+            '
+              .cli.version                         = $version |
+              .cli.assets["linux-amd64"]           = {url: $lu,  sha256: $lus} |
+              .cli.assets["linux-arm64"]           = {url: $la,  sha256: $las} |
+              .cli.assets["darwin-amd64"]          = {url: $du,  sha256: $dus} |
+              .cli.assets["darwin-arm64"]          = {url: $da,  sha256: $das} |
+              .cli.assets["windows-amd64"]         = {url: $wu,  sha256: $wus} |
+              .payload.version                     = $version   |
+              .payload.image                       = ("sympactdev/ctfdevkit:" + $version)
+            ' manifest.json > manifest.json.new
+          mv manifest.json.new manifest.json
+
+      - name: Commit and push manifest.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git diff --cached --quiet && echo "manifest unchanged, skipping commit" && exit 0
+          git commit -m "chore: update manifest for ${GITHUB_REF_NAME} [skip ci]"
+          git push origin HEAD:main

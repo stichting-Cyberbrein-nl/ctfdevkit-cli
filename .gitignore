@@ -1,0 +1,7 @@
+dist/
+*.exe
+devkit
+devkit-*
+*.test
+*.out
+.claude/

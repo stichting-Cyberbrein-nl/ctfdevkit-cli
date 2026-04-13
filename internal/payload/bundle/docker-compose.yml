@@ -1,0 +1,75 @@
+name: ctfdevkit
+
+services:
+  app:
+    image: sympactdev/ctfdevkit:{{VERSION}}
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      APP_NAME: "CTF:DevKit"
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: "${APP_URL:-https://ctf.dev}"
+      DEVKIT_BRAND: "Cyberbrein"
+      DEVKIT_VERSION: "{{VERSION}}"
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ctfdevkit
+      DB_USERNAME: ctfdevkit
+      DB_PASSWORD: ctfdevkit
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+    volumes:
+      - ${ASSIGNMENTS_PATH:-./assignments}:/var/www/html/assignments:rw
+      - devkit_storage:/var/www/html/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - devkit
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ctfdevkit
+      MYSQL_USER: ctfdevkit
+      MYSQL_PASSWORD: ctfdevkit
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - devkit_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - devkit
+
+  proxy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "${DEVKIT_HTTP_PORT:-80}:80"
+      - "${DEVKIT_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy_data:/data
+    depends_on:
+      - app
+    networks:
+      - devkit
+
+volumes:
+  devkit_storage:
+  devkit_mysql:
+  caddy_data:
+
+networks:
+  devkit:
+    driver: bridge

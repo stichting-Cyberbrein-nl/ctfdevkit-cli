@@ -1,0 +1,16 @@
+{
+  "cli": {
+    "version": "1.0.0",
+    "assets": {
+      "linux-amd64":   { "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.0/devkit-linux-amd64.tar.gz",   "sha256": "" },
+      "linux-arm64":   { "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.0/devkit-linux-arm64.tar.gz",   "sha256": "" },
+      "darwin-amd64":  { "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.0/devkit-darwin-amd64.tar.gz",  "sha256": "" },
+      "darwin-arm64":  { "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.0/devkit-darwin-arm64.tar.gz",  "sha256": "" },
+      "windows-amd64": { "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.0/devkit-windows-amd64.zip",    "sha256": "" }
+    }
+  },
+  "payload": {
+    "version": "1.0.0",
+    "image": "sympactdev/ctfdevkit:1.0.0"
+  }
+}
