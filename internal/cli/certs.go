@@ -16,13 +16,14 @@ func newCertsCmd() *cobra.Command {
 			ctx := cmd.Context()
 			cfg := configFrom(ctx)
 			plat := platformFrom(ctx)
+			bindIP := effectiveBindIP(cfg, plat)
 
 			certsDir, err := platform.CertsDir()
 			if err != nil {
 				return err
 			}
 
-			return certs.Generate(certsDir, cfg.Domain, cfg.BindIP, force, plat)
+			return certs.Generate(certsDir, cfg.Domain, bindIP, force, plat)
 		},
 	}
 

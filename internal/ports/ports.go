@@ -30,9 +30,14 @@ func IsPrivileged(port int) bool {
 
 // IsInUse returns true if a TCP listener is bound to the given port.
 func IsInUse(port int) bool {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	return IsInUseOnHost("", port)
+}
+
+// IsInUseOnHost returns true if a TCP listener is bound to host:port.
+func IsInUseOnHost(host string, port int) bool {
+	ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
-		return true // could not bind → someone else is listening
+		return true
 	}
 	ln.Close()
 	return false
@@ -41,37 +46,40 @@ func IsInUse(port int) bool {
 // FindFreePort tries the preferred port first; if unavailable (or unreleasable),
 // it asks the OS for any free ephemeral port and returns that instead.
 func FindFreePort(ctx context.Context, preferred int, plat platform.Platform) (int, error) {
-	if !IsInUse(preferred) {
+	return FindFreePortForBindIP(ctx, preferred, "", plat)
+}
+
+// FindFreePortForBindIP tries the preferred port on a specific bind IP.
+func FindFreePortForBindIP(ctx context.Context, preferred int, bindIP string, plat platform.Platform) (int, error) {
+	if !IsInUseOnHost(bindIP, preferred) {
 		return preferred, nil
 	}
 
 	// Try to release it (non-fatal if it fails).
-	output.Infof("Port %d is in use — attempting to release...", preferred)
+	output.Infof("Port %d is in use - attempting to release...", preferred)
 	_ = ForceRelease(ctx, preferred, plat)
 	time.Sleep(400 * time.Millisecond)
 
-	if !IsInUse(preferred) {
+	if !IsInUseOnHost(bindIP, preferred) {
 		output.Successf("Port %d released", preferred)
 		return preferred, nil
 	}
 
-	// Fall back: scan a range of common alternative ports.
 	alternatives := alternativesFor(preferred)
 	for _, p := range alternatives {
-		if !IsInUse(p) {
-			output.Warnf("Port %d busy — using port %d instead", preferred, p)
+		if !IsInUseOnHost(bindIP, p) {
+			output.Warnf("Port %d busy - using port %d instead", preferred, p)
 			return p, nil
 		}
 	}
 
-	// Last resort: ask the OS for any free port.
-	ln, err := net.Listen("tcp", ":0")
+	ln, err := net.Listen("tcp", net.JoinHostPort(bindIP, "0"))
 	if err != nil {
 		return 0, fmt.Errorf("no free port available")
 	}
 	p := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
-	output.Warnf("Port %d busy — using random port %d", preferred, p)
+	output.Warnf("Port %d busy - using random port %d", preferred, p)
 	return p, nil
 }
 
@@ -95,11 +103,16 @@ func alternativesFor(port int) []int {
 // ResolvePorts tries to get the preferred HTTP/HTTPS ports and falls back gracefully.
 // Returns the actual PortPair that should be used (may differ from preferred).
 func ResolvePorts(ctx context.Context, preferHTTP, preferHTTPS int, plat platform.Platform) (PortPair, error) {
-	httpPort, err := FindFreePort(ctx, preferHTTP, plat)
+	return ResolvePortsForBindIP(ctx, preferHTTP, preferHTTPS, "", plat)
+}
+
+// ResolvePortsForBindIP tries to get the preferred ports on a specific bind IP.
+func ResolvePortsForBindIP(ctx context.Context, preferHTTP, preferHTTPS int, bindIP string, plat platform.Platform) (PortPair, error) {
+	httpPort, err := FindFreePortForBindIP(ctx, preferHTTP, bindIP, plat)
 	if err != nil {
 		return PortPair{}, fmt.Errorf("cannot bind HTTP port: %w", err)
 	}
-	httpsPort, err := FindFreePort(ctx, preferHTTPS, plat)
+	httpsPort, err := FindFreePortForBindIP(ctx, preferHTTPS, bindIP, plat)
 	if err != nil {
 		return PortPair{}, fmt.Errorf("cannot bind HTTPS port: %w", err)
 	}

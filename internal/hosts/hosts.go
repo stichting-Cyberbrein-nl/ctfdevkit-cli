@@ -58,23 +58,23 @@ func ensureWindowsNativeHosts(ip, domain string) error {
 		return nil
 	}
 
-	if containsEntry(string(content), ip, domain) {
+	updatedContent, changed := upsertHostsEntry(string(content), ip, domain, "\r\n")
+	if !changed {
 		output.Successf("Hosts entry already present: %s %s", ip, domain)
 		return nil
 	}
 
 	entry := ip + " " + domain
-	newContent := strings.TrimRight(string(content), "\r\n") + "\r\n" + entry + "\r\n"
 
 	// Try direct write first (works when running as Administrator).
-	if err := os.WriteFile(hostsPath, []byte(newContent), 0644); err == nil {
+	if err := os.WriteFile(hostsPath, []byte(updatedContent), 0644); err == nil {
 		output.Successf("Windows hosts updated: %s", entry)
 		return nil
 	}
 
 	// Not admin — attempt UAC elevation via PowerShell.
 	output.Info("Requesting Administrator privileges to update hosts file (UAC prompt may appear)...")
-	if err := elevateWindowsHostsWrite(hostsPath, newContent); err == nil {
+	if err := elevateWindowsHostsWrite(hostsPath, updatedContent); err == nil {
 		output.Successf("Windows hosts updated: %s", entry)
 		return nil
 	}
@@ -175,12 +175,12 @@ func ensureUnixHosts(ip, domain, hostsPath string) error {
 	}
 
 	entry := fmt.Sprintf("%s %s", ip, domain)
-	if containsEntry(string(content), ip, domain) {
+	newContent, changed := upsertHostsEntry(string(content), ip, domain, "\n")
+	if !changed {
 		output.Successf("Hosts entry already present: %s", entry)
 		return nil
 	}
 
-	newContent := strings.TrimRight(string(content), "\n") + "\n" + entry + "\n"
 	return writeHostsFile(hostsPath, newContent)
 }
 
@@ -190,12 +190,10 @@ func ensureWindowsHostsFromWSL(ip, domain, hostsPath string) error {
 		return fmt.Errorf("reading Windows hosts: %w", err)
 	}
 
-	if containsEntry(string(content), ip, domain) {
+	newContent, changed := upsertHostsEntry(string(content), ip, domain, "\r\n")
+	if !changed {
 		return nil
 	}
-
-	entry := fmt.Sprintf("%s %s", ip, domain)
-	newContent := strings.TrimRight(string(content), "\n\r") + "\r\n" + entry + "\r\n"
 
 	// Write via temp file and cp with elevated permissions.
 	tmp, err := os.CreateTemp("", "devkit-hosts-*.txt")
@@ -271,6 +269,45 @@ func removeFromHostsFile(domain, hostsPath string) error {
 	return writeHostsFile(hostsPath, newContent)
 }
 
+func upsertHostsEntry(content, ip, domain, lineEnding string) (string, bool) {
+	entry := fmt.Sprintf("%s %s", ip, domain)
+	if containsEntry(content, ip, domain) {
+		return content, false
+	}
+
+	var lines []string
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			lines = append(lines, line)
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) >= 2 && hostsLineContainsDomain(fields, domain) {
+			continue
+		}
+		lines = append(lines, line)
+	}
+
+	newContent := strings.TrimRight(strings.Join(lines, lineEnding), "\r\n")
+	if newContent != "" {
+		newContent += lineEnding
+	}
+	newContent += entry + lineEnding
+	return newContent, true
+}
+
+func hostsLineContainsDomain(fields []string, domain string) bool {
+	for _, field := range fields[1:] {
+		if field == domain {
+			return true
+		}
+	}
+	return false
+}
+
 func containsEntry(content, ip, domain string) bool {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
@@ -279,7 +316,7 @@ func containsEntry(content, ip, domain string) bool {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == ip && fields[1] == domain {
+		if len(fields) >= 2 && fields[0] == ip && hostsLineContainsDomain(fields, domain) {
 			return true
 		}
 	}

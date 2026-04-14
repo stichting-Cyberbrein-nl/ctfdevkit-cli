@@ -11,8 +11,8 @@ import (
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/browser"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/certs"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/config"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/hosts"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
@@ -38,6 +38,7 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 	plat := platformFrom(ctx)
 	cfg := configFrom(ctx)
 	s := stateFrom(ctx)
+	bindIP := effectiveBindIP(cfg, plat)
 
 	const totalSteps = 6
 
@@ -61,7 +62,7 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 
 	// Step 4 — Hosts binding
 	output.Step(4, totalSteps, "Configuring hosts file")
-	if err := hosts.EnsureBinding(cfg.BindIP, cfg.Domain, plat); err != nil {
+	if err := hosts.EnsureBinding(bindIP, cfg.Domain, plat); err != nil {
 		return err
 	}
 
@@ -71,14 +72,14 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 	if err != nil {
 		return err
 	}
-	if err := certs.Generate(certsDir, cfg.Domain, cfg.BindIP, false, plat); err != nil {
+	if err := certs.Generate(certsDir, cfg.Domain, bindIP, false, plat); err != nil {
 		return err
 	}
 
 	// Step 6 — Resolve ports + assignments + start containers
 	output.Step(6, totalSteps, "Resolving ports and starting containers")
 
-	pair, err := ports.ResolvePorts(ctx, 80, 443, plat)
+	pair, err := ports.ResolvePortsForBindIP(ctx, 80, 443, bindIP, plat)
 	if err != nil {
 		return err
 	}
@@ -106,7 +107,7 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 		output.Warnf("Using non-standard port — app will be at %s", appURL)
 	}
 
-	if err := writeComposeEnv(composeDir, pair.HTTP, pair.HTTPS, appURL, assignmentsPath); err != nil {
+	if err := writeComposeEnv(composeDir, bindIP, pair.HTTP, pair.HTTPS, appURL, assignmentsPath); err != nil {
 		return fmt.Errorf("writing compose .env: %w", err)
 	}
 
@@ -185,10 +186,10 @@ func resolveAssignmentsPath(cfg config.Config, composeDir string) (string, error
 }
 
 // writeComposeEnv writes a .env file that Docker Compose reads for port, URL and path variables.
-func writeComposeEnv(composeDir string, httpPort, httpsPort int, appURL, assignmentsPath string) error {
+func writeComposeEnv(composeDir, bindIP string, httpPort, httpsPort int, appURL, assignmentsPath string) error {
 	content := fmt.Sprintf(
-		"DEVKIT_HTTP_PORT=%d\nDEVKIT_HTTPS_PORT=%d\nAPP_URL=%s\nASSIGNMENTS_PATH=%s\n",
-		httpPort, httpsPort, appURL, assignmentsPath,
+		"DEVKIT_BIND_IP=%s\nDEVKIT_HTTP_PORT=%d\nDEVKIT_HTTPS_PORT=%d\nAPP_URL=%s\nASSIGNMENTS_PATH=%s\n",
+		bindIP, httpPort, httpsPort, appURL, assignmentsPath,
 	)
 	return os.WriteFile(filepath.Join(composeDir, ".env"), []byte(content), 0644)
 }
@@ -199,4 +200,14 @@ func buildURL(domain string, httpsPort int) string {
 		return "https://" + domain
 	}
 	return fmt.Sprintf("https://%s:%d", domain, httpsPort)
+}
+
+func effectiveBindIP(cfg config.Config, plat platform.Platform) string {
+	if plat.OS == platform.OSWindows && (cfg.BindIP == "" || cfg.BindIP == "127.0.0.1") {
+		return "127.0.0.2"
+	}
+	if cfg.BindIP == "" {
+		return "127.0.0.1"
+	}
+	return cfg.BindIP
 }

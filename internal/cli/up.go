@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/ports"
@@ -21,6 +21,7 @@ func newUpCmd() *cobra.Command {
 			cfg := configFrom(ctx)
 			s := stateFrom(ctx)
 			plat := platformFrom(ctx)
+			bindIP := effectiveBindIP(cfg, plat)
 
 			if !s.IsPayloadInstalled() {
 				return fmt.Errorf("payload not installed — run `devkit setup` first")
@@ -32,7 +33,7 @@ func newUpCmd() *cobra.Command {
 			}
 
 			output.Info("Resolving ports...")
-			pair, err := ports.ResolvePorts(ctx, 80, 443, plat)
+			pair, err := ports.ResolvePortsForBindIP(ctx, 80, 443, bindIP, plat)
 			if err != nil {
 				return err
 			}
@@ -42,7 +43,7 @@ func newUpCmd() *cobra.Command {
 			if assignmentsPath == "" {
 				assignmentsPath = filepath.Join(composeDir, "assignments")
 			}
-			if err := writeComposeEnv(composeDir, pair.HTTP, pair.HTTPS, appURL, assignmentsPath); err != nil {
+			if err := writeComposeEnv(composeDir, bindIP, pair.HTTP, pair.HTTPS, appURL, assignmentsPath); err != nil {
 				return err
 			}
 

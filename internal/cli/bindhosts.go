@@ -14,9 +14,10 @@ func newBindHostsCmd() *cobra.Command {
 			ctx := cmd.Context()
 			cfg := configFrom(ctx)
 			plat := platformFrom(ctx)
+			bindIP := effectiveBindIP(cfg, plat)
 
-			output.Infof("Binding %s → %s", cfg.BindIP, cfg.Domain)
-			return hosts.EnsureBinding(cfg.BindIP, cfg.Domain, plat)
+			output.Infof("Binding %s -> %s", bindIP, cfg.Domain)
+			return hosts.EnsureBinding(bindIP, cfg.Domain, plat)
 		},
 	}
 }

@@ -19,9 +19,10 @@ func newSecureCmd() *cobra.Command {
 			cfg := configFrom(ctx)
 			plat := platformFrom(ctx)
 			s := stateFrom(ctx)
+			bindIP := effectiveBindIP(cfg, plat)
 
 			output.Info("Repairing hosts binding...")
-			if err := hosts.EnsureBinding(cfg.BindIP, cfg.Domain, plat); err != nil {
+			if err := hosts.EnsureBinding(bindIP, cfg.Domain, plat); err != nil {
 				return err
 			}
 
@@ -30,7 +31,7 @@ func newSecureCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := certs.Generate(certsDir, cfg.Domain, cfg.BindIP, true, plat); err != nil {
+			if err := certs.Generate(certsDir, cfg.Domain, bindIP, true, plat); err != nil {
 				return err
 			}
 
