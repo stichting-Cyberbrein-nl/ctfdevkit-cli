@@ -1,3 +1,4 @@
+// Developed by Olivier Flentge on behalf of Cyberbrein B.V. (KvK 97562912).
 // Package tui provides the interactive Bubble Tea terminal UI for devkit.
 package tui
 
@@ -159,7 +160,6 @@ func (m Model) View() string {
 
 	// Brand line
 	b.WriteString(styleBold.Render("  "+m.cfg.Brand+" DevKit") + "  " + styleMuted.Render("v"+m.version) + "\n")
-	b.WriteString(styleMuted.Render("  Ontwikkeld door Olivier Flentge in opdracht van Cyberbrein B.V. (KvK 97562912)") + "\n")
 
 	// Status pill
 	b.WriteString("  " + m.status.Label())

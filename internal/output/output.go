@@ -1,3 +1,4 @@
+// Developed by Olivier Flentge on behalf of Cyberbrein B.V. (KvK 97562912).
 // Package output provides terminal output helpers with color and progress support.
 package output
 
@@ -37,7 +38,6 @@ func Banner(brand, version string) {
 	fmt.Println()
 	bold.Printf("  %s DevKit  ", brand)
 	faint.Printf("v%s\n", version)
-	faint.Println("  Ontwikkeld door Olivier Flentge in opdracht van Cyberbrein B.V. (KvK 97562912)")
 	fmt.Println()
 }
 
