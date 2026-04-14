@@ -137,6 +137,16 @@ func Generate(certDir, domain, bindIP string, force bool, plat platform.Platform
 		}
 	}
 
+	if plat.OS == platform.OSWindows || plat.IsWSL {
+		if err := SyncWindowsTrust(); err != nil {
+			output.Warnf("Could not sync CA to Windows trust store: %v", err)
+			output.Hint("Your browser on Windows may show a certificate warning.")
+		} else if plat.OS == platform.OSWindows {
+			output.Hint("Windows browsers laden nieuwe certificaten pas na een volledige herstart.")
+			output.Hint("Sluit Brave/Chrome/Edge volledig af en open daarna https://ctf.dev opnieuw.")
+		}
+	}
+
 	if !force && HasValidCert(certFile, domain) {
 		output.Successf("TLS certificate already valid for %s", domain)
 		return nil
@@ -160,14 +170,6 @@ func Generate(certDir, domain, bindIP string, force bool, plat platform.Platform
 	genCmd.Stderr = os.Stderr
 	if err := genCmd.Run(); err != nil {
 		return fmt.Errorf("mkcert cert generation failed: %w", err)
-	}
-
-	// On WSL, also import the CA into Windows trust store.
-	if plat.IsWSL {
-		if err := SyncWindowsTrust(); err != nil {
-			output.Warnf("Could not sync CA to Windows trust store: %v", err)
-			output.Hint("Your browser on Windows may show a certificate warning.")
-		}
 	}
 
 	output.Successf("TLS certificate generated: %s", certFile)
