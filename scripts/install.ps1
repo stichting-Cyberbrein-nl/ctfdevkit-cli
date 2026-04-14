@@ -50,7 +50,10 @@ function Get-Sha256([string]$Path) {
 
 # ── Add directory to user PATH (no admin required) ────────────────────────────
 function Add-ToUserPath([string]$Dir) {
-    $current = [System.Environment]::GetEnvironmentVariable('PATH', 'User') ?? ''
+    $current = [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+    if ($null -eq $current) {
+        $current = ''
+    }
     $parts   = $current -split ';' | Where-Object { $_ -ne '' }
 
     if ($parts -contains $Dir) {
