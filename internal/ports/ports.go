@@ -174,8 +174,18 @@ func forceReleaseWindows(ctx context.Context, port int) error {
 	if err != nil || len(pids) == 0 {
 		return nil
 	}
+
+	hasWSLRelay := false
 	for _, pid := range pids {
+		if isProcessName(ctx, pid, "wslrelay.exe") {
+			hasWSLRelay = true
+		} else if isDockerProcess(ctx, pid) {
+			continue
+		}
 		exec.CommandContext(ctx, "taskkill.exe", "/PID", strconv.Itoa(pid), "/F").Run()
+	}
+	if hasWSLRelay {
+		stopUserWSLDistros(ctx)
 	}
 	return nil
 }
@@ -220,6 +230,13 @@ func findPIDsOnPortWindows(ctx context.Context, port int) ([]int, error) {
 		if len(fields) < 5 {
 			continue
 		}
+		if !strings.EqualFold(fields[3], "LISTENING") {
+			continue
+		}
+		localAddr := fields[1]
+		if !strings.HasSuffix(localAddr, portStr) {
+			continue
+		}
 		pid, err := strconv.Atoi(fields[4])
 		if err != nil {
 			continue
@@ -227,6 +244,20 @@ func findPIDsOnPortWindows(ctx context.Context, port int) ([]int, error) {
 		pids = append(pids, pid)
 	}
 	return pids, nil
+}
+
+func stopUserWSLDistros(ctx context.Context) {
+	output.Info("Stopping WSL distro(s) that forward this port...")
+	script := "$names = (wsl.exe --list --running --quiet) -replace \"`0\", \"\" | Where-Object { $_ -and $_ -notlike \"docker-desktop*\" }; foreach ($name in $names) { wsl.exe --terminate $name }"
+	_ = exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", script).Run()
+}
+
+func isProcessName(ctx context.Context, pid int, want string) bool {
+	out, err := exec.CommandContext(ctx, "tasklist.exe", "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(out)), strings.ToLower(want))
 }
 
 // filterDockerPIDs removes Docker-related processes from the list.

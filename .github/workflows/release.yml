@@ -62,9 +62,7 @@ jobs:
               .cli.assets["linux-arm64"]           = {url: $la,  sha256: $las} |
               .cli.assets["darwin-amd64"]          = {url: $du,  sha256: $dus} |
               .cli.assets["darwin-arm64"]          = {url: $da,  sha256: $das} |
-              .cli.assets["windows-amd64"]         = {url: $wu,  sha256: $wus} |
-              .payload.version                     = $version   |
-              .payload.image                       = ("sympactdev/ctfdevkit:" + $version)
+              .cli.assets["windows-amd64"]         = {url: $wu,  sha256: $wus}
             ' manifest.json > manifest.json.new
           mv manifest.json.new manifest.json
 
