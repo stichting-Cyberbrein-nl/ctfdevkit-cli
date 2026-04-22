@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/assignments"
 )
 
 // promptModel is a Bubble Tea model for a single-field path input.
@@ -16,7 +15,7 @@ type promptModel struct {
 	input     textinput.Model
 	title     string
 	subtitle  string
-	detected  string // pre-filled auto-detected path
+	detected  string // pre-filled suggested path
 	confirmed string // set when user presses Enter
 	err       string
 	quitting  bool
@@ -51,6 +50,9 @@ func (m promptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
+			if strings.TrimSpace(m.input.Value()) == "" && m.detected != "" {
+				m.confirmed = m.detected
+			}
 			m.quitting = true
 			return m, tea.Quit
 
@@ -93,7 +95,7 @@ func (m promptModel) View() string {
 	if m.detected != "" {
 		detected := lipgloss.NewStyle().
 			Foreground(colorGreen).
-			Render(fmt.Sprintf("  ✓ Auto-detected: %s", m.detected))
+			Render(fmt.Sprintf("  ✓ Suggested path: %s", m.detected))
 		b.WriteString(detected + "\n")
 		b.WriteString(styleMuted.Render("  Press Enter to use it, or type a different path.") + "\n\n")
 	}
@@ -107,22 +109,19 @@ func (m promptModel) View() string {
 
 	b.WriteString("  " + styleKey.Render("enter") + styleHint.Render(" confirm") +
 		styleMuted.Render("  ·  ") +
-		styleKey.Render("esc") + styleHint.Render(" skip"))
+		styleKey.Render("esc") + styleHint.Render(" use suggestion"))
 	b.WriteString("\n")
 
 	return b.String()
 }
 
-// AskAssignmentsPath shows an interactive prompt to configure the assignments directory.
-// Returns the confirmed path, or "" if the user skipped.
-func AskAssignmentsPath() (string, error) {
-	detected := assignments.AutoDetect()
-
+// AskAssignmentsPath shows an interactive prompt to choose where DevKit places the assignments repo.
+func AskAssignmentsPath(suggested string) (string, error) {
 	m := newPromptModel(
-		"Where are your CTF assignments?",
-		"Enter the path to your assignments folder.",
+		"Where should DevKit place the assignments repo?",
+		"Enter the path where the public assignments repo should live.",
 		"/path/to/assignments",
-		detected,
+		suggested,
 	)
 
 	p := tea.NewProgram(m)
@@ -133,7 +132,7 @@ func AskAssignmentsPath() (string, error) {
 
 	final, ok := result.(promptModel)
 	if !ok || final.confirmed == "" {
-		return detected, nil // fall back to auto-detected if user skipped
+		return suggested, nil
 	}
 	return final.confirmed, nil
 }

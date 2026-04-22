@@ -138,6 +138,7 @@ func init() {
 		newUpdateCmd(),
 		newSelfUpdateCmd(),
 		newVersionCmd(),
+		newAssignmentsCmd(),
 		newConfigAssignmentsCmd(),
 	)
 }

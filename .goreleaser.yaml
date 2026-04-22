@@ -35,6 +35,7 @@ archives:
         formats: [zip]
     files:
       - scripts/install.sh
+      - scripts/install-macos.sh
       - scripts/install.ps1
 
 checksum:

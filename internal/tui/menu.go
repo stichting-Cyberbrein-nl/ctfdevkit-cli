@@ -38,7 +38,7 @@ var menuItems = []item{
 	{icon: "$", label: "Shell", desc: "Interactive shell in the app container", cmd: "shell"},
 	{icon: ">", label: "Artisan", desc: "Run php artisan <command> in container", cmd: "artisan"},
 	{icon: "+", label: "Scaffold assignment", desc: "Create a new CTF assignment skeleton", cmd: "scaffold"},
-	{icon: "📁", label: "Set assignments path", desc: "Change where your CTF assignments are stored", cmd: "config-assignments"},
+	{icon: "📁", label: "Set assignments repo", desc: "Choose where the public assignments repo is cloned", cmd: "config-assignments"},
 	{icon: "", label: "", desc: ""}, // separator
 	{icon: "↑", label: "Update payload", desc: "Pull latest Docker image from Docker Hub", cmd: "update"},
 	{icon: "↑", label: "Update CLI", desc: "Self-update the devkit binary", cmd: "self-update"},
