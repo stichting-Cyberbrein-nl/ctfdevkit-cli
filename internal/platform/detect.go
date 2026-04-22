@@ -118,6 +118,8 @@ func (p Platform) AssetKey() string {
 	osName := p.OS.String()
 	if p.IsWSL {
 		osName = "linux" // WSL uses Linux binaries
+	} else if p.OS == OSMacOS {
+		osName = "darwin"
 	}
 	return osName + "-" + p.Arch.String()
 }

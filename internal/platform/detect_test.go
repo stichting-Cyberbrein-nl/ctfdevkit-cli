@@ -32,7 +32,7 @@ func TestAssetKey(t *testing.T) {
 		want string
 	}{
 		{platform.Platform{OS: platform.OSLinux, Arch: platform.ArchAMD64}, "linux-amd64"},
-		{platform.Platform{OS: platform.OSMacOS, Arch: platform.ArchARM64}, "macos-arm64"},
+		{platform.Platform{OS: platform.OSMacOS, Arch: platform.ArchARM64}, "darwin-arm64"},
 		{platform.Platform{OS: platform.OSWSL, Arch: platform.ArchAMD64, IsWSL: true}, "linux-amd64"},
 		{platform.Platform{OS: platform.OSWindows, Arch: platform.ArchAMD64}, "windows-amd64"},
 	}
