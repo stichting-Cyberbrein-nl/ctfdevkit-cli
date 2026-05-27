@@ -49,23 +49,65 @@ function Get-Sha256([string]$Path) {
 }
 
 # ── Add directory to user PATH (no admin required) ────────────────────────────
+# ── Add directory to user PATH (no admin required) ────────────────────────────
 function Add-ToUserPath([string]$Dir) {
-    $current = [System.Environment]::GetEnvironmentVariable('PATH', 'User')
-    if ($null -eq $current) {
-        $current = ''
-    }
-    $parts   = $current -split ';' | Where-Object { $_ -ne '' }
+    $regKey = 'Registry::HKEY_CURRENT_USER\Environment'
+
+    # Read current User PATH directly from registry (not via .NET, dat cachet/quirkt)
+    $current = (Get-ItemProperty -Path $regKey -Name 'PATH' -ErrorAction SilentlyContinue).PATH
+    if ($null -eq $current) { $current = '' }
+
+    Write-Info "Current User PATH length: $($current.Length) chars"
+
+    $parts = $current -split ';' | Where-Object { $_ -ne '' }
 
     if ($parts -contains $Dir) {
-        Write-Ok "$Dir is already in your PATH"
+        Write-Ok "$Dir is already in your User PATH"
+        if (($env:PATH -split ';') -notcontains $Dir) {
+            $env:PATH = ($env:PATH.TrimEnd(';') + ";$Dir")
+        }
         return $false
     }
 
     $newPath = ($parts + $Dir) -join ';'
-    [System.Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
 
-    # Also apply to the current session immediately.
+    # Behoud REG_EXPAND_SZ als er %VAR% references in zitten, anders REG_SZ
+    $valueKind = if ($newPath -match '%[^%]+%') { 'ExpandString' } else { 'String' }
+    Write-Info "Writing PATH as $valueKind ($($newPath.Length) chars)"
+
+    try {
+        Set-ItemProperty -Path $regKey -Name 'PATH' -Value $newPath -Type $valueKind -Force
+    } catch {
+        Write-Fail "Failed to write User PATH to registry: $($_.Exception.Message)"
+    }
+
+    # Broadcast WM_SETTINGCHANGE zodat nieuwe processen het direct oppikken
+    if (-not ('Win32.NativeMethods' -as [type])) {
+        Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @'
+[DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+public static extern IntPtr SendMessageTimeout(
+    IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+    uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@
+    }
+    $HWND_BROADCAST   = [IntPtr]0xffff
+    $WM_SETTINGCHANGE = 0x1A
+    $result = [UIntPtr]::Zero
+    [void][Win32.NativeMethods]::SendMessageTimeout(
+        $HWND_BROADCAST, $WM_SETTINGCHANGE, [UIntPtr]::Zero, 'Environment',
+        2, 5000, [ref]$result)
+
+    # Verifieer wat we net geschreven hebben
+    $verify = (Get-ItemProperty -Path $regKey -Name 'PATH' -ErrorAction SilentlyContinue).PATH
+    $verifyParts = $verify -split ';'
+    if ($verifyParts -notcontains $Dir) {
+        Write-Fail "PATH write reported success maar $Dir staat er niet in na verify! Geschreven: $($verify.Length) chars"
+    }
+    Write-Ok "Registry verified: $Dir staat nu in User PATH (totaal $($verifyParts.Count) entries)"
+
+    # En de huidige sessie ook
     $env:PATH = ($env:PATH.TrimEnd(';') + ";$Dir")
+
     return $true
 }
 
