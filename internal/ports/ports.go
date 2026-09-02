@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -127,7 +128,12 @@ func EnsureReserved(ctx context.Context, plat platform.Platform) error {
 }
 
 // ForceRelease tries to free the given port using platform-specific methods.
+// The whole attempt is bounded by a short timeout: releasing a port is best-effort, and a
+// hanging helper (an interactive sudo prompt, a wedged lsof) must never stall setup.
 func ForceRelease(ctx context.Context, port int, plat platform.Platform) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	// First, try stopping Docker containers that publish this port.
 	if err := docker.StopContainersOnPort(ctx, port); err == nil {
 		if !IsInUse(port) {
@@ -145,6 +151,14 @@ func ForceRelease(ctx context.Context, port int, plat platform.Platform) error {
 
 // forceReleaseUnix releases a port on Linux/macOS/WSL.
 func forceReleaseUnix(ctx context.Context, port int) error {
+	// Privileged ports (<1024) on Unix belong to system services — nginx, apache, systemd.
+	// Killing those is hostile, and escalating with an interactive `sudo` blocks on a password
+	// prompt until the process is killed (the "signal: killed" failure seen on Debian).
+	// Unless we already are root, leave them alone and let the caller fall back to 8080/8443.
+	if IsPrivileged(port) && os.Geteuid() != 0 {
+		return nil
+	}
+
 	pids, err := findPIDsOnPortUnix(ctx, port)
 	if err != nil || len(pids) == 0 {
 		return nil
@@ -168,17 +182,31 @@ func forceReleaseUnix(ctx context.Context, port int) error {
 	}
 
 	for _, pid := range filtered {
-		// SIGTERM first.
-		exec.CommandContext(ctx, "sudo", "kill", "-TERM", strconv.Itoa(pid)).Run()
+		signalPID(ctx, pid, "-TERM")
 	}
 	time.Sleep(500 * time.Millisecond)
 
 	for _, pid := range filtered {
-		// SIGKILL if still running.
-		exec.CommandContext(ctx, "sudo", "kill", "-KILL", strconv.Itoa(pid)).Run()
+		signalPID(ctx, pid, "-KILL")
 	}
 
 	return nil
+}
+
+// signalPID sends a signal to pid, refusing to touch init or this process' own tree.
+// When not root it escalates with `sudo -n`, which fails immediately rather than blocking
+// on an interactive password prompt.
+func signalPID(ctx context.Context, pid int, sig string) {
+	if pid <= 1 || pid == os.Getpid() || pid == os.Getppid() {
+		return
+	}
+
+	if os.Geteuid() == 0 {
+		exec.CommandContext(ctx, "kill", sig, strconv.Itoa(pid)).Run()
+		return
+	}
+
+	exec.CommandContext(ctx, "sudo", "-n", "kill", sig, strconv.Itoa(pid)).Run()
 }
 
 // forceReleaseWindows releases a port on native Windows.
