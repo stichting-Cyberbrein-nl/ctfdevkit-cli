@@ -3,6 +3,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -11,10 +12,8 @@ import (
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/platform"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/releases"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/state"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/tui"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/update"
 )
 
 // Version is set at build time via -ldflags.
@@ -25,18 +24,15 @@ var rootCmd = &cobra.Command{
 	Use:   "devkit",
 	Short: "Cyberbrein CTF DevKit — local environment manager",
 	Long:  `devkit manages your local CTF:DevKit environment.`,
+	// Runs for every subcommand too, so `devkit setup` / `devkit up` pick up a new
+	// release instead of only the bare TUI invocation.
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return ensureUpToDate(cmd)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg := configFrom(ctx)
 		s := stateFrom(ctx)
-
-		updated, err := requireCLIUpdateIfAvailable(ctx, cfg)
-		if err != nil {
-			return err
-		}
-		if updated {
-			return nil
-		}
 
 		// Resolve the compose directory if payload is installed.
 		composeDir := ""
@@ -50,40 +46,6 @@ var rootCmd = &cobra.Command{
 	},
 	SilenceUsage:  true,
 	SilenceErrors: true,
-}
-
-func requireCLIUpdateIfAvailable(ctx context.Context, cfg config.Config) (bool, error) {
-	if Version == "" || Version == "dev" {
-		return false, nil
-	}
-
-	manifest, err := releases.Fetch(ctx, cfg.ManifestURL)
-	if err != nil {
-		output.Hintf("Kon update-check niet uitvoeren: %v", err)
-		return false, nil
-	}
-
-	newer, err := manifest.IsNewerCLI(Version)
-	if err != nil {
-		output.Hintf("Kon update-versie niet vergelijken: %v", err)
-		return false, nil
-	}
-	if !newer {
-		return false, nil
-	}
-
-	accepted, err := tui.AskRequiredUpdate(Version, manifest.CLI.Version)
-	if err != nil {
-		return false, err
-	}
-	if !accepted {
-		return false, fmt.Errorf("update verplicht: run `devkit self-update` en start DevKit daarna opnieuw")
-	}
-
-	if err := update.SelfUpdate(ctx, manifest, Version, platformFrom(ctx)); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // Execute is the entrypoint called from main.
@@ -111,6 +73,10 @@ func Execute(ctx context.Context, version string) {
 	}
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		if errors.Is(err, errRestartRequired) {
+			output.Successf("%v", err)
+			return
+		}
 		output.Failf("%v", err)
 		os.Exit(1)
 	}
