@@ -25,7 +25,7 @@
     }
   },
   "payload": {
-    "version": "1.1.2",
-    "image": "sympactdev/ctfdevkit:1.1.2"
+    "version": "1.3.0",
+    "image": "sympactdev/ctfdevkit:1.3.0"
   }
 }
