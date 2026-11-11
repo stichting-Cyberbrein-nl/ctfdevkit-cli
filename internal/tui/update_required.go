@@ -42,7 +42,7 @@ func (m requiredUpdateModel) View() string {
 	var b strings.Builder
 	b.WriteString("\n")
 	b.WriteString(styleYellow.Render("  Update available! ("+formatVersion(m.current)+") -> ("+formatVersion(m.latest)+")") + "\n")
-	b.WriteString(styleMuted.Render("  Je moet eerst updaten voordat je DevKit verder gebruikt.") + "\n\n")
+	b.WriteString(styleMuted.Render("  You need to update before you can continue using DevKit.") + "\n\n")
 
 	row := styleItemSelected.Width(52).Render("  Update now")
 	panel := stylePanel.Width(56).Render(row)

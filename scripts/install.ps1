@@ -81,7 +81,7 @@ function Add-ToUserPath([string]$Dir) {
         Write-Fail "Failed to write User PATH to registry: $($_.Exception.Message)"
     }
 
-    # Broadcast WM_SETTINGCHANGE zodat nieuwe processen het direct oppikken
+    # Broadcast WM_SETTINGCHANGE so new processes pick it up immediately
     if (-not ('Win32.NativeMethods' -as [type])) {
         Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @'
 [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
@@ -101,11 +101,11 @@ public static extern IntPtr SendMessageTimeout(
     $verify = (Get-ItemProperty -Path $regKey -Name 'PATH' -ErrorAction SilentlyContinue).PATH
     $verifyParts = $verify -split ';'
     if ($verifyParts -notcontains $Dir) {
-        Write-Fail "PATH write reported success maar $Dir staat er niet in na verify! Geschreven: $($verify.Length) chars"
+        Write-Fail "PATH write reported success but $Dir is not in it after verify! Written: $($verify.Length) chars"
     }
-    Write-Ok "Registry verified: $Dir staat nu in User PATH (totaal $($verifyParts.Count) entries)"
+    Write-Ok "Registry verified: $Dir is now in User PATH (total $($verifyParts.Count) entries)"
 
-    # En de huidige sessie ook
+    # And the current session too
     $env:PATH = ($env:PATH.TrimEnd(';') + ";$Dir")
 
     return $true

@@ -142,8 +142,8 @@ func Generate(certDir, domain, bindIP string, force bool, plat platform.Platform
 			output.Warnf("Could not sync CA to Windows trust store: %v", err)
 			output.Hint("Your browser on Windows may show a certificate warning.")
 		} else if plat.OS == platform.OSWindows {
-			output.Hint("Windows browsers laden nieuwe certificaten pas na een volledige herstart.")
-			output.Hint("Sluit Brave/Chrome/Edge volledig af en open daarna https://ctf.dev opnieuw.")
+			output.Hint("Windows browsers only load new certificates after a full restart.")
+			output.Hint("Fully close Brave/Chrome/Edge, then open https://ctf.dev again.")
 		}
 	}
 

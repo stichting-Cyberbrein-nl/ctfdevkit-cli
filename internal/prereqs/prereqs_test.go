@@ -84,9 +84,9 @@ func TestValidateDockerAPTRepoRejectsUnsupportedSuite(t *testing.T) {
 	}
 }
 
-func TestDockerSocketAccessErrorGivesDutchRecoverySteps(t *testing.T) {
+func TestDockerSocketAccessErrorGivesRecoverySteps(t *testing.T) {
 	msg := dockerSocketAccessError("kali", true).Error()
-	for _, want := range []string{"newgrp docker", "nieuwe terminal", "sudo reboot", "devkit"} {
+	for _, want := range []string{"newgrp docker", "new terminal", "sudo reboot", "devkit"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("dockerSocketAccessError() missing %q in %q", want, msg)
 		}

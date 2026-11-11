@@ -17,7 +17,7 @@ import (
 
 // errRestartRequired signals that the binary was replaced and the command must be re-run.
 // Execute turns it into a friendly message and a zero exit code.
-var errRestartRequired = errors.New("devkit is bijgewerkt; draai je commando opnieuw")
+var errRestartRequired = errors.New("devkit has been updated; please run your command again")
 
 // updateCheckInterval throttles the manifest fetch so routine commands stay snappy.
 const updateCheckInterval = time.Hour
@@ -58,14 +58,14 @@ func ensureUpToDate(cmd *cobra.Command) error {
 
 	manifest, err := releases.Fetch(ctx, cfg.ManifestURL)
 	if err != nil {
-		output.Hintf("Kon niet op updates controleren: %v", err)
+		output.Hintf("Could not check for updates: %v", err)
 		return nil
 	}
 
 	s.LastUpdateCheck = time.Now()
 	s.CLIVersion = Version
 	if err := state.Save(s); err != nil {
-		output.Hintf("Kon update-check niet opslaan: %v", err)
+		output.Hintf("Could not save update check: %v", err)
 	}
 
 	if err := applyCLIUpdate(ctx, manifest); err != nil {
@@ -105,7 +105,7 @@ func shouldCheckForUpdates(cmdName, version string, lastCheck time.Time) bool {
 func applyCLIUpdate(ctx context.Context, manifest *releases.Manifest) error {
 	newer, err := manifest.IsNewerCLI(Version)
 	if err != nil {
-		output.Hintf("Kon CLI-versie niet vergelijken: %v", err)
+		output.Hintf("Could not compare CLI version: %v", err)
 		return nil
 	}
 	if !newer {
@@ -120,10 +120,10 @@ func applyCLIUpdate(ctx context.Context, manifest *releases.Manifest) error {
 			return err
 		}
 		if !accepted {
-			return errors.New("update verplicht: run `devkit self-update` en probeer opnieuw")
+			return errors.New("update required: run `devkit self-update` and try again")
 		}
 	} else {
-		output.Infof("Nieuwe CLI beschikbaar (%s → %s), wordt automatisch bijgewerkt...", Version, manifest.CLI.Version)
+		output.Infof("New CLI available (%s → %s), updating automatically...", Version, manifest.CLI.Version)
 	}
 
 	if err := update.SelfUpdate(ctx, manifest, Version, platformFrom(ctx)); err != nil {
@@ -141,13 +141,13 @@ func applyPayloadUpdate(ctx context.Context, s *state.State, manifest *releases.
 		return
 	}
 
-	output.Infof("Nieuwe payload beschikbaar: %s → %s", s.PayloadVersion, manifest.Payload.Version)
+	output.Infof("New payload available: %s → %s", s.PayloadVersion, manifest.Payload.Version)
 	if err := payload.Update(ctx, s, manifest.Payload); err != nil {
-		output.Warnf("Payload-update mislukt, huidige versie blijft actief: %v", err)
+		output.Warnf("Payload update failed, current version remains active: %v", err)
 		return
 	}
 
-	output.Successf("Payload bijgewerkt naar v%s", manifest.Payload.Version)
+	output.Successf("Payload updated to v%s", manifest.Payload.Version)
 }
 
 // isInteractive reports whether stdin is a terminal we can prompt on.

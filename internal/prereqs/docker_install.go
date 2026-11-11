@@ -60,7 +60,7 @@ func addCurrentUserToDockerGroup(ctx context.Context) bool {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err == nil {
-			output.Hint("Gebruiker toegevoegd aan docker groep. Activeer dit met: newgrp docker, een nieuwe terminal, of sudo reboot.")
+			output.Hint("User added to the docker group. Activate it with: newgrp docker, a new terminal, or sudo reboot.")
 			return true
 		}
 	}
