@@ -1,26 +1,26 @@
 {
   "cli": {
-    "version": "1.0.17",
+    "version": "1.1.0",
     "assets": {
       "linux-amd64": {
-        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.17/devkit-linux-amd64.tar.gz",
-        "sha256": "34957b2ce9595ac8033395d470bcfc6e2e1b96496d3298c53b250ac45273fd87"
+        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.1.0/devkit-linux-amd64.tar.gz",
+        "sha256": "dbfe302d605217e386ea903121d2bab3c5709d6cb1638730d978aeb4abc2e87c"
       },
       "linux-arm64": {
-        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.17/devkit-linux-arm64.tar.gz",
-        "sha256": "a8fc0ae6df14605d29c55c9bb5b94a860fc1e94376029754f1165a3123566c9a"
+        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.1.0/devkit-linux-arm64.tar.gz",
+        "sha256": "779cfeac1c5c823235b3a10b68213f0d1db6a7c57cac6398f97ebd416d59657b"
       },
       "darwin-amd64": {
-        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.17/devkit-darwin-amd64.tar.gz",
-        "sha256": "0704c365af690bbad55dbe956e04e1efd3e6024a6a3329137e2d5c6fac954cf6"
+        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.1.0/devkit-darwin-amd64.tar.gz",
+        "sha256": "b383a4e5e2d5d1ca415094c56483d10e1346c02434d60794ea8b77d39892a5e7"
       },
       "darwin-arm64": {
-        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.17/devkit-darwin-arm64.tar.gz",
-        "sha256": "693f3bcf609421566935a1148fbfa22b3e88765df9f33c7929f3a935ffe3facd"
+        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.1.0/devkit-darwin-arm64.tar.gz",
+        "sha256": "63501df3f27848eb990d294ebd8564fa6af8ba4c7712abc20bfc5e5cc9b0cf38"
       },
       "windows-amd64": {
-        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.0.17/devkit-windows-amd64.zip",
-        "sha256": "ad069aabe6c61fafac034a211ca8a405e6bb1927c960c9556dca5c1c6f919f1c"
+        "url": "https://github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/releases/download/v1.1.0/devkit-windows-amd64.zip",
+        "sha256": "0766fe3392c6ca3a2328e5acdd1b9293c2fbc314c0f78086e9d077f12ff5a1ea"
       }
     }
   },
