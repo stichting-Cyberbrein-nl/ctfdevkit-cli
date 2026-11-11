@@ -11,8 +11,12 @@ on:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -25,8 +29,16 @@ jobs:
         run: go vet ./...
 
       # Force GOARCH=amd64 so platform detection tests pass on the runner.
-      - name: Test
+      - name: Test (race)
+        if: runner.os == 'Linux'
+        shell: bash
         run: GOARCH=amd64 go test -race ./...
+
+      # -race needs cgo, which the macOS and Windows runners do not set up by default.
+      - name: Test
+        if: runner.os != 'Linux'
+        shell: bash
+        run: go test ./...
 
   cross-compile:
     name: Build (${{ matrix.goos }}-${{ matrix.goarch }})

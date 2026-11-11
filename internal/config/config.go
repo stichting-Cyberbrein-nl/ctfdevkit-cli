@@ -30,7 +30,7 @@ type Config struct {
 func Default() Config {
 	return Config{
 		Brand:              "Cyberbrein",
-		Version:            "1.1.2",
+		Version:            "1.3.0",
 		Domain:             "ctf.dev",
 		BindIP:             "127.0.0.1",
 		URL:                "https://ctf.dev",

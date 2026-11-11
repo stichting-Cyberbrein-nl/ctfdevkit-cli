@@ -13,10 +13,13 @@ import (
 func newAssignmentsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "assignments",
-		Short: "Manage the assignments repository",
+		Short: "Create, check and manage assignments",
 	}
 
 	cmd.AddCommand(
+		newAssignmentsNewCmd(),
+		newAssignmentsValidateCmd(),
+		newAssignmentsCheckCmd(),
 		newAssignmentsStatusCmd(),
 		newAssignmentsUpdateCmd(),
 		newAssignmentsSetPathCmd(),

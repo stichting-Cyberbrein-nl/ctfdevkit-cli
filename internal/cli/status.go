@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"errors"
+
 	"github.com/spf13/cobra"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/webapp"
 )
 
 func newStatusCmd() *cobra.Command {
@@ -28,9 +30,13 @@ func newStatusCmd() *cobra.Command {
 			}
 
 			output.Header("Health Check")
-			if err := doctor.Run(ctx, composeDir, cfg.AppContainer); err != nil {
+			report, err := webapp.New(composeDir, cfg.AppContainer).Doctor(ctx, true)
+			var cmdErr *webapp.CommandError
+			if err != nil && !errors.As(err, &cmdErr) {
 				output.Failf("Health check failed: %v", err)
+				return nil
 			}
+			renderDoctor(report)
 
 			return nil
 		},

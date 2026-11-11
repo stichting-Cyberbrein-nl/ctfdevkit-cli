@@ -42,7 +42,7 @@ func (s EnvStatus) Label() string {
 type msgStatusChecked struct{ status EnvStatus }
 
 // checkStatus probes Docker and the running containers in the background.
-func checkStatus(composeDir string) tea.Cmd {
+func checkStatus(composeDir, service string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -55,8 +55,8 @@ func checkStatus(composeDir string) tea.Cmd {
 			return msgStatusChecked{StatusNotInstalled}
 		}
 
-		out, err := docker.ComposeExecOutput(ctx, composeDir, "app", "echo", "ok")
-		if err != nil || out == "" {
+		running, err := docker.IsServiceRunning(ctx, composeDir, service)
+		if err != nil || !running {
 			return msgStatusChecked{StatusStopped}
 		}
 		return msgStatusChecked{StatusRunning}

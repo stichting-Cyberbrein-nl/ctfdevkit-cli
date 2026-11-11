@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"errors"
+
 	"github.com/spf13/cobra"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/webapp"
 )
 
 func newDoctorCmd() *cobra.Command {
@@ -20,7 +22,16 @@ func newDoctorCmd() *cobra.Command {
 				return err
 			}
 
-			return doctor.Run(ctx, composeDir, cfg.AppContainer)
+			report, err := webapp.New(composeDir, cfg.AppContainer).Doctor(ctx, true)
+			var cmdErr *webapp.CommandError
+			if err != nil && !errors.As(err, &cmdErr) {
+				return err
+			}
+			renderDoctor(report)
+			if !report.OK {
+				return errors.New("health check failed")
+			}
+			return nil
 		},
 	}
 }

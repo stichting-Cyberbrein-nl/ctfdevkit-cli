@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -111,6 +112,11 @@ func Update(ctx context.Context, s *state.State, rel releases.PayloadRelease) er
 		return nil
 	}
 
+	// Re-extract so the baked DEVKIT_VERSION and new environment lines follow the
+	// release; .env and certs/ are not bundle files and stay untouched.
+	if err := Extract(s.PayloadPath, rel.Version); err != nil {
+		return fmt.Errorf("refreshing payload bundle: %w", err)
+	}
 	if err := UpdateImage(s.PayloadPath, rel.Image); err != nil {
 		return fmt.Errorf("updating docker-compose image tag: %w", err)
 	}
@@ -142,6 +148,39 @@ func UpdateImage(payloadDir, newImage string) error {
 
 	newContent := strings.Join(lines, "\n") + "\n"
 	return os.WriteFile(composePath, []byte(newContent), 0644)
+}
+
+// ComposeEnv holds the variables Docker Compose reads from the payload .env file.
+type ComposeEnv struct {
+	BindIP          string
+	HTTPPort        int
+	HTTPSPort       int
+	AppURL          string
+	AssignmentsPath string
+}
+
+// WriteComposeEnv writes <dir>/.env. Values are single-quoted so Compose reads them
+// literally: Windows backslashes, spaces and '#' survive unchanged.
+func WriteComposeEnv(dir string, e ComposeEnv) error {
+	assignmentsPath, err := filepath.Abs(e.AssignmentsPath)
+	if err != nil {
+		return err
+	}
+	vars := []struct{ key, value string }{
+		{"DEVKIT_BIND_IP", e.BindIP},
+		{"DEVKIT_HTTP_PORT", strconv.Itoa(e.HTTPPort)},
+		{"DEVKIT_HTTPS_PORT", strconv.Itoa(e.HTTPSPort)},
+		{"APP_URL", e.AppURL},
+		{"ASSIGNMENTS_PATH", assignmentsPath},
+	}
+	var b strings.Builder
+	for _, v := range vars {
+		if strings.Contains(v.value, "'") {
+			return fmt.Errorf("path must not contain a single quote: %s", v.value)
+		}
+		fmt.Fprintf(&b, "%s='%s'\n", v.key, v.value)
+	}
+	return os.WriteFile(filepath.Join(dir, ".env"), []byte(b.String()), 0644)
 }
 
 // ComposeDir returns the directory where docker compose should be run.

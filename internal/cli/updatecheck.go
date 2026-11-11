@@ -46,6 +46,11 @@ var commandsUpdatingPayload = map[string]bool{
 // release exists and, for the commands that start the stack, pulls a newer payload image.
 // Network failures are reported but never block the command the user actually asked for.
 func ensureUpToDate(cmd *cobra.Command) error {
+	// AI tools start `mcp serve` without a terminal; it must never self-update and exit.
+	if cmd.Annotations[skipUpdateCheckAnnotation] == "true" {
+		return nil
+	}
+
 	ctx := cmd.Context()
 	cfg := configFrom(ctx)
 	s := stateFrom(ctx)

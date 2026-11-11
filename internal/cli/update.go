@@ -6,11 +6,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/config"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/releases"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/state"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/webapp"
 )
 
 func newUpdateCmd() *cobra.Command {
@@ -57,7 +57,7 @@ func newUpdateCmd() *cobra.Command {
 
 			// A running stack keeps the old container until it is recreated, so apply
 			// the update right away instead of leaving the user on the old version.
-			if out, err := docker.ComposeExecOutput(ctx, composeDir, cfg.AppContainer, "echo", "ok"); err != nil || out == "" {
+			if running, err := docker.IsServiceRunning(ctx, composeDir, cfg.AppContainer); err != nil || !running {
 				output.Successf("DevKit updated to v%s", manifest.Payload.Version)
 				output.Hint("Run `devkit up` to start it.")
 				return nil
@@ -67,7 +67,7 @@ func newUpdateCmd() *cobra.Command {
 			if err := docker.ComposeUp(ctx, composeDir); err != nil {
 				return err
 			}
-			if err := doctor.WaitForReady(ctx, composeDir, cfg.AppContainer); err != nil {
+			if err := waitForApp(ctx, webapp.New(composeDir, cfg.AppContainer)); err != nil {
 				return err
 			}
 

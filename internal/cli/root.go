@@ -52,27 +52,41 @@ var rootCmd = &cobra.Command{
 func Execute(ctx context.Context, version string) {
 	Version = version
 
+	// `mcp serve` hands stdout to the MCP protocol: nothing else may write to it.
+	mcpServe := isMCPServeInvocation(os.Args[1:])
+	fatalf := output.Fatalf
+	if mcpServe {
+		fatalf = func(format string, a ...any) {
+			fmt.Fprintf(os.Stderr, "devkit mcp serve: "+format+"\n", a...)
+			os.Exit(1)
+		}
+	}
+
 	plat := platform.Detect()
 	ctx = withPlatform(ctx, plat)
 
 	cfg, err := config.Load()
 	if err != nil {
-		output.Fatalf("Failed to load config: %v", err)
+		fatalf("Failed to load config: %v", err)
 	}
 	ctx = withConfig(ctx, cfg)
 
 	s, err := state.Load()
 	if err != nil {
-		output.Fatalf("Failed to load state: %v", err)
+		fatalf("Failed to load state: %v", err)
 	}
 	ctx = withState(ctx, s)
 
 	// Print banner only when a subcommand is invoked directly (not TUI, not completion).
-	if len(os.Args) >= 2 && os.Args[1] != "completion" && os.Args[1] != "__complete" {
+	if !mcpServe && len(os.Args) >= 2 && os.Args[1] != "completion" && os.Args[1] != "__complete" {
 		output.Banner(cfg.Brand, version)
 	}
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		if mcpServe {
+			fmt.Fprintf(os.Stderr, "devkit mcp serve: %v\n", err)
+			os.Exit(1)
+		}
 		if errors.Is(err, errRestartRequired) {
 			output.Successf("%v", err)
 			return
@@ -90,7 +104,7 @@ func init() {
 		newResetCmd(),
 		newLogsCmd(),
 		newDoctorCmd(),
-		newScaffoldCmd(),
+		newMCPCmd(),
 		newStatusCmd(),
 		newShellCmd(),
 		newArtisanCmd(),
@@ -107,6 +121,11 @@ func init() {
 		newAssignmentsCmd(),
 		newConfigAssignmentsCmd(),
 	)
+}
+
+// isMCPServeInvocation reports whether args (without the program name) run `mcp serve`.
+func isMCPServeInvocation(args []string) bool {
+	return len(args) >= 2 && args[0] == "mcp" && args[1] == "serve"
 }
 
 // newVersionCmd shows the current CLI version.

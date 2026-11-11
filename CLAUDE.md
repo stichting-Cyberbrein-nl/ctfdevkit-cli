@@ -39,13 +39,13 @@ trusted HTTPS certificates via mkcert, and manages `/etc/hosts` bindings.
 ```
 cmd/devkit/main.go          Entry point — injects version via -ldflags
 internal/
-  assignments/              Auto-detects CTF assignment directories
+  assignments/              Assignments repo clone/update + assignment counting
   browser/                  Opens URLs in the default browser
   certs/                    mkcert install + TLS cert generation
   cli/                      All Cobra commands (one file per command)
   config/                   config.json loader/saver + env overrides
   docker/                   Docker daemon detection, compose helpers
-  doctor/                   Health-check runner
+  mcpclients/               Registers the DevKit MCP server in AI tools (Claude Code, Codex, Copilot, Cursor, Gemini) + MCP probe
   hosts/                    /etc/hosts + Windows hosts file management
   output/                   Colored terminal output helpers
   payload/                  Downloads + installs the Docker Compose bundle
@@ -56,6 +56,7 @@ internal/
   state/                    Tracks installed versions (state.json)
   tui/                      Interactive TUI menu (Bubble Tea)
   update/                   Self-update logic (atomic binary replacement)
+  webapp/                   Client for the webapp `php artisan devkit:* --json` contract (API v1)
 scripts/
   install.sh                Linux one-liner installer (Debian / Ubuntu / Kali)
   install.ps1               Windows one-liner installer (PowerShell)
@@ -150,7 +151,14 @@ Override with env var `DEVKIT_MANIFEST_URL` or `--manifest-url` flag.
 | `devkit status` | Show container status |
 | `devkit logs` | Stream container logs |
 | `devkit shell` | Interactive shell inside the app container |
-| `devkit doctor` | Health check |
+| `devkit doctor` | Health check (`devkit:doctor --json --strict`) |
+| `devkit assignments new [title]` | Create an assignment in the house style (`--language nl\|en`, `--category`, `--difficulty`, `--number`) |
+| `devkit assignments validate [name]` | Validate assignments against the platform rules (`--strict`) |
+| `devkit assignments check <name>` | Platform rules + house style + smoke test (`--no-smoke`) |
+| `devkit mcp install [client...]` | Register the DevKit MCP server in AI tools (`claude`, `codex`, `copilot`, `cursor`, `gemini`; `--all`) |
+| `devkit mcp uninstall [client...]` | Remove the MCP server from AI tools (`--all`) |
+| `devkit mcp status` | Show connected AI tools and test the MCP server |
+| `devkit mcp serve` | Stdio MCP bridge into the container (started by AI tools; never writes to stdout itself) |
 | `devkit certs` | Regenerate TLS certificates |
 | `devkit bind-hosts` | Update /etc/hosts entry |
 | `devkit self-update` | Update the CLI binary |

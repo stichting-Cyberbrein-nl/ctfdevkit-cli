@@ -3,15 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/browser"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/certs"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/config"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/hosts"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
@@ -19,6 +16,7 @@ import (
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/ports"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/prereqs"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/state"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/webapp"
 )
 
 func newSetupCmd() *cobra.Command {
@@ -105,7 +103,7 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 		output.Warnf("Using non-standard port — app will be at %s", appURL)
 	}
 
-	if err := writeComposeEnv(composeDir, bindIP, pair.HTTP, pair.HTTPS, appURL, assignmentsPath); err != nil {
+	if err := payload.WriteComposeEnv(composeDir, payload.ComposeEnv{BindIP: bindIP, HTTPPort: pair.HTTP, HTTPSPort: pair.HTTPS, AppURL: appURL, AssignmentsPath: assignmentsPath}); err != nil {
 		return fmt.Errorf("writing compose .env: %w", err)
 	}
 
@@ -114,11 +112,14 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 	}
 
 	output.Info("Waiting for application health check...")
-	if err := doctor.WaitForReady(ctx, composeDir, cfg.AppContainer); err != nil {
+	client := webapp.New(composeDir, cfg.AppContainer)
+	if err := waitForApp(ctx, client); err != nil {
 		return err
 	}
 
-	_ = doctor.Run(ctx, composeDir, cfg.AppContainer)
+	if report, err := client.Doctor(ctx, true); err == nil {
+		renderDoctor(report)
+	}
 
 	output.Divider()
 	output.Successf("Setup complete!  →  %s", appURL)
@@ -135,15 +136,6 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 	}
 
 	return nil
-}
-
-// writeComposeEnv writes a .env file that Docker Compose reads for port, URL and path variables.
-func writeComposeEnv(composeDir, bindIP string, httpPort, httpsPort int, appURL, assignmentsPath string) error {
-	content := fmt.Sprintf(
-		"DEVKIT_BIND_IP=%s\nDEVKIT_HTTP_PORT=%d\nDEVKIT_HTTPS_PORT=%d\nAPP_URL=%s\nASSIGNMENTS_PATH=%s\n",
-		bindIP, httpPort, httpsPort, appURL, assignmentsPath,
-	)
-	return os.WriteFile(filepath.Join(composeDir, ".env"), []byte(content), 0644)
 }
 
 // buildURL constructs the app URL, omitting the port for standard 443.

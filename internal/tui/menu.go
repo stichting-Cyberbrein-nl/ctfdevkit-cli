@@ -40,8 +40,12 @@ var menuItems = []item{
 
 	{group: "Develop", label: "Shell", desc: "Open a shell in the app container", cmd: "shell"},
 	{group: "Develop", label: "Artisan", desc: "Run a php artisan command", cmd: "artisan"},
-	{group: "Develop", label: "Scaffold assignment", desc: "Create a new CTF assignment skeleton", cmd: "scaffold"},
+	{group: "Develop", label: "New assignment", desc: "Create an assignment in the house style", cmd: "assignments", args: []string{"new"}},
+	{group: "Develop", label: "Validate assignments", desc: "Check all assignments against the platform", cmd: "assignments", args: []string{"validate"}},
 	{group: "Develop", label: "Set assignments repo", desc: "Where the assignments repo is cloned", cmd: "config-assignments"},
+
+	{group: "AI tools", label: "Connect AI tools", desc: "Install the DevKit MCP server in your AI tools", cmd: "mcp", args: []string{"install"}},
+	{group: "AI tools", label: "AI tools status", desc: "Show connected AI tools and test the server", cmd: "mcp", args: []string{"status"}},
 
 	{group: "Updates", label: "Update DevKit", desc: "Update the DevKit environment", cmd: "update"},
 	{group: "Updates", label: "Update CLI", desc: "Self-update the devkit binary", cmd: "self-update"},
@@ -98,7 +102,7 @@ func New(cfg config.Config, st state.State, version, composeDir string) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, checkStatus(m.composeDir), checkLatestDevKit(m.cfg.ManifestURL))
+	return tea.Batch(m.spinner.Tick, checkStatus(m.composeDir, m.cfg.AppContainer), checkLatestDevKit(m.cfg.ManifestURL))
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -296,7 +300,7 @@ func (m Model) renderFooter(l menuLayout) string {
 	it := menuItems[m.cursor]
 
 	line := keyHints("↑↓", "navigate", "enter", "run", "q", "quit")
-	cmd := styleMuted.Render("devkit " + it.cmd)
+	cmd := styleMuted.Render(strings.Join(append([]string{"devkit", it.cmd}, it.args...), " "))
 	if gap := l.width - lipgloss.Width(line) - lipgloss.Width(cmd); gap >= columnGap {
 		line += strings.Repeat(" ", gap) + cmd
 	}

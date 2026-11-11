@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"os"
 	"strings"
 
@@ -21,6 +22,10 @@ type promptModel struct {
 	err       string
 	width     int
 	quitting  bool
+	cancelled bool
+
+	expandHome bool   // expand a leading ~/ to the home directory
+	emptyError string // shown when Enter is pressed on an empty value
 }
 
 func newPromptModel(title, subtitle, placeholder, detected string) promptModel {
@@ -66,6 +71,7 @@ func (m promptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if strings.TrimSpace(m.input.Value()) == "" && m.detected != "" {
 				m.confirmed = m.detected
 			}
+			m.cancelled = m.confirmed == ""
 			m.quitting = true
 			return m, tea.Quit
 
@@ -75,11 +81,11 @@ func (m promptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				val = m.detected
 			}
 			if val == "" {
-				m.err = "Path cannot be empty"
+				m.err = m.emptyError
 				return m, nil
 			}
 			// Expand ~ manually.
-			if strings.HasPrefix(val, "~/") {
+			if m.expandHome && strings.HasPrefix(val, "~/") {
 				home, _ := os.UserHomeDir()
 				val = home + val[1:]
 			}
@@ -127,6 +133,8 @@ func AskAssignmentsPath(suggested string) (string, error) {
 		"/path/to/assignments",
 		suggested,
 	)
+	m.expandHome = true
+	m.emptyError = "Path cannot be empty"
 
 	p := tea.NewProgram(m)
 	result, err := p.Run()
@@ -137,6 +145,25 @@ func AskAssignmentsPath(suggested string) (string, error) {
 	final, ok := result.(promptModel)
 	if !ok || final.confirmed == "" {
 		return suggested, nil
+	}
+	return final.confirmed, nil
+}
+
+// ErrCancelled is returned when the user dismisses a prompt.
+var ErrCancelled = errors.New("cancelled")
+
+// AskText asks for a single non-empty line of text.
+func AskText(title, subtitle, placeholder string) (string, error) {
+	m := newPromptModel(title, subtitle, placeholder, "")
+	m.emptyError = "Value cannot be empty"
+
+	result, err := tea.NewProgram(m).Run()
+	if err != nil {
+		return "", err
+	}
+	final, ok := result.(promptModel)
+	if !ok || final.cancelled || final.confirmed == "" {
+		return "", ErrCancelled
 	}
 	return final.confirmed, nil
 }

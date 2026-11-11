@@ -82,6 +82,7 @@ func TestInspectClassifiesWrongRepoAndChangeTypes(t *testing.T) {
 		path := createGitRepo(t, "https://github.com/stichting-Cyberbrein-nl/assignments")
 		mkdirAll(t, filepath.Join(path, "custom-assignment"))
 		writeFile(t, filepath.Join(path, "custom-assignment", "config.json"), []byte(`{"name":"custom"}`))
+		mkdirAll(t, filepath.Join(path, "custom-assignment", "wwwroot"))
 
 		status, err := Inspect(ctx, path, "https://github.com/stichting-Cyberbrein-nl/assignments")
 		if err != nil {

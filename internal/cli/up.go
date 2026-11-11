@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/doctor"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/ports"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/webapp"
 )
 
 func newUpCmd() *cobra.Command {
@@ -43,7 +43,7 @@ func newUpCmd() *cobra.Command {
 			if assignmentsPath == "" {
 				assignmentsPath = filepath.Join(composeDir, "assignments")
 			}
-			if err := writeComposeEnv(composeDir, bindIP, pair.HTTP, pair.HTTPS, appURL, assignmentsPath); err != nil {
+			if err := payload.WriteComposeEnv(composeDir, payload.ComposeEnv{BindIP: bindIP, HTTPPort: pair.HTTP, HTTPSPort: pair.HTTPS, AppURL: appURL, AssignmentsPath: assignmentsPath}); err != nil {
 				return err
 			}
 
@@ -53,7 +53,7 @@ func newUpCmd() *cobra.Command {
 			}
 
 			output.Info("Waiting for health check...")
-			if err := doctor.WaitForReady(ctx, composeDir, cfg.AppContainer); err != nil {
+			if err := waitForApp(ctx, webapp.New(composeDir, cfg.AppContainer)); err != nil {
 				return err
 			}
 
