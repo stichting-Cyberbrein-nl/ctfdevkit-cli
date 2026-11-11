@@ -72,26 +72,28 @@ func Fetch(ctx context.Context, manifestURL string) (*Manifest, error) {
 
 // IsNewerCLI returns true if the manifest CLI version is newer than currentVersion.
 func (m *Manifest) IsNewerCLI(currentVersion string) (bool, error) {
-	return isNewer(m.CLI.Version, currentVersion)
+	return IsNewer(m.CLI.Version, currentVersion)
 }
 
 // IsNewerPayload returns true if the manifest payload version is newer than currentVersion.
 func (m *Manifest) IsNewerPayload(currentVersion string) (bool, error) {
-	return isNewer(m.Payload.Version, currentVersion)
+	return IsNewer(m.Payload.Version, currentVersion)
 }
 
-func isNewer(manifestVersion, currentVersion string) (bool, error) {
-	if currentVersion == "" || currentVersion == "dev" {
+// IsNewer reports whether candidate is a newer semantic version than current.
+// An empty or "dev" current version is always older.
+func IsNewer(candidate, current string) (bool, error) {
+	if current == "" || current == "dev" {
 		return true, nil
 	}
 
-	mv, err := semver.NewVersion(manifestVersion)
+	mv, err := semver.NewVersion(candidate)
 	if err != nil {
-		return false, fmt.Errorf("invalid manifest version %q: %w", manifestVersion, err)
+		return false, fmt.Errorf("invalid version %q: %w", candidate, err)
 	}
-	cv, err := semver.NewVersion(currentVersion)
+	cv, err := semver.NewVersion(current)
 	if err != nil {
-		return false, fmt.Errorf("invalid current version %q: %w", currentVersion, err)
+		return false, fmt.Errorf("invalid version %q: %w", current, err)
 	}
 
 	return mv.GreaterThan(cv), nil

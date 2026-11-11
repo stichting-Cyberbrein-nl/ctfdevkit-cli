@@ -83,12 +83,20 @@ func Save(cfg Config) error {
 	return os.WriteFile(filepath.Join(cfgDir, filename), data, 0644)
 }
 
+// envVersion pins the DevKit version, e.g. to test a release before it is published.
+const envVersion = "DEVKIT_VERSION"
+
+// VersionPinnedByEnv reports whether DEVKIT_VERSION overrides the configured version.
+func VersionPinnedByEnv() bool {
+	return os.Getenv(envVersion) != ""
+}
+
 // applyEnv overrides config fields with environment variables.
 func applyEnv(cfg Config) Config {
 	if v := os.Getenv("DEVKIT_BRAND"); v != "" {
 		cfg.Brand = v
 	}
-	if v := os.Getenv("DEVKIT_VERSION"); v != "" {
+	if v := os.Getenv(envVersion); v != "" {
 		cfg.Version = v
 	}
 	if v := os.Getenv("DEVKIT_BIND_IP"); v != "" {

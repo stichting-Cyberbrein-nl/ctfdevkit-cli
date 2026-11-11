@@ -15,6 +15,7 @@ import (
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/platform"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/ports"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/prereqs"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/releases"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/state"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/webapp"
 )
@@ -46,8 +47,15 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 
 	// Step 2 — Payload
 	output.Step(2, totalSteps, "Installing payload")
-	if err := payload.EnsureInstalled(ctx, &s, cfg.Version); err != nil {
+	payloadVersion := setupPayloadVersion(cfg, s)
+	if err := payload.EnsureInstalled(ctx, &s, payloadVersion); err != nil {
 		return err
+	}
+	if payloadVersion != cfg.Version {
+		cfg.Version = payloadVersion
+		if err := config.Save(cfg); err != nil {
+			output.Warnf("Could not save DevKit version: %v", err)
+		}
 	}
 
 	// Step 3 — Disk sanity
@@ -136,6 +144,19 @@ func runSetup(ctx context.Context, skipOpen bool) error {
 	}
 
 	return nil
+}
+
+// setupPayloadVersion picks the DevKit version setup installs. A config.json that still
+// names an older version must never downgrade the installed DevKit; only an explicit
+// DEVKIT_VERSION may do that.
+func setupPayloadVersion(cfg config.Config, s state.State) string {
+	if config.VersionPinnedByEnv() || s.PayloadVersion == "" {
+		return cfg.Version
+	}
+	if installedIsNewer, err := releases.IsNewer(s.PayloadVersion, cfg.Version); err == nil && installedIsNewer {
+		return s.PayloadVersion
+	}
+	return cfg.Version
 }
 
 // buildURL constructs the app URL, omitting the port for standard 443.

@@ -27,25 +27,34 @@ func newUpdateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			rel := manifest.Payload
 
-			newer, err := manifest.IsNewerPayload(s.PayloadVersion)
+			refresh, err := shouldRefreshPayload(s.PayloadVersion, rel.Version)
 			if err != nil {
 				return err
 			}
-			if !newer {
-				output.Successf("DevKit is already up to date (v%s)", s.PayloadVersion)
+			if !refresh {
+				output.Successf("Installed DevKit v%s is newer than the latest release (v%s); nothing to update", s.PayloadVersion, rel.Version)
 				return nil
 			}
 
-			if s.PayloadVersion != "" {
-				output.Infof("Updating DevKit: v%s → v%s", s.PayloadVersion, manifest.Payload.Version)
-			}
-			if err := installDevKitVersion(ctx, &cfg, &s, manifest.Payload); err != nil {
-				return err
+			versionChanged := s.PayloadVersion != rel.Version
+			if versionChanged && s.PayloadVersion != "" {
+				output.Infof("Updating DevKit: v%s → v%s", s.PayloadVersion, rel.Version)
+			} else if !versionChanged {
+				output.Infof("Checking DevKit v%s for a newer image...", rel.Version)
 			}
 
+			// Always pull: the same version tag can be republished with fixes, and a local
+			// image with that tag may not be the published one.
+			imageBefore := docker.ImageID(ctx, rel.Image)
+			if err := installDevKitVersion(ctx, &cfg, &s, rel); err != nil {
+				return err
+			}
+			changed := versionChanged || imageBefore == "" || docker.ImageID(ctx, rel.Image) != imageBefore
+
 			if !s.IsPayloadInstalled() {
-				output.Successf("DevKit v%s downloaded", manifest.Payload.Version)
+				output.Successf("DevKit v%s downloaded", rel.Version)
 				output.Hint("Run `devkit setup` to install it.")
 				return nil
 			}
@@ -55,15 +64,19 @@ func newUpdateCmd() *cobra.Command {
 				return err
 			}
 
-			// A running stack keeps the old container until it is recreated, so apply
-			// the update right away instead of leaving the user on the old version.
 			if running, err := docker.IsServiceRunning(ctx, composeDir, cfg.AppContainer); err != nil || !running {
-				output.Successf("DevKit updated to v%s", manifest.Payload.Version)
+				if changed {
+					output.Successf("DevKit updated to v%s", rel.Version)
+				} else {
+					output.Successf("DevKit is already up to date (v%s)", rel.Version)
+				}
 				output.Hint("Run `devkit up` to start it.")
 				return nil
 			}
 
-			output.Info("Restarting containers with the new version...")
+			// A running stack keeps its old container until it is recreated. Compose only
+			// recreates the services whose image or configuration actually changed.
+			output.Info("Applying the update to the running containers...")
 			if err := docker.ComposeUp(ctx, composeDir); err != nil {
 				return err
 			}
@@ -71,10 +84,27 @@ func newUpdateCmd() *cobra.Command {
 				return err
 			}
 
-			output.Successf("DevKit updated to v%s and running", manifest.Payload.Version)
+			if changed {
+				output.Successf("DevKit updated to v%s and running", rel.Version)
+			} else {
+				output.Successf("DevKit is already up to date (v%s) and running", rel.Version)
+			}
 			return nil
 		},
 	}
+}
+
+// shouldRefreshPayload reports whether `devkit update` should (re)install the latest
+// release: always, unless the installed version is newer (a local test build).
+func shouldRefreshPayload(installed, latest string) (bool, error) {
+	if installed == "" {
+		return true, nil
+	}
+	installedIsNewer, err := releases.IsNewer(installed, latest)
+	if err != nil {
+		return false, err
+	}
+	return !installedIsNewer, nil
 }
 
 // installDevKitVersion pulls the release image, points the compose file at it and records

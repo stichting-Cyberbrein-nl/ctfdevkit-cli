@@ -124,6 +124,15 @@ func Pull(ctx context.Context, image string) error {
 	return runStreamed(ctx, "docker", "pull", image)
 }
 
+// ImageID returns the local ID of an image reference, or "" when it is not present.
+func ImageID(ctx context.Context, image string) string {
+	out, err := exec.CommandContext(ctx, "docker", "image", "inspect", "--format", "{{.Id}}", image).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // runStreamed runs a command with stdout/stderr connected to the terminal.
 func runStreamed(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
