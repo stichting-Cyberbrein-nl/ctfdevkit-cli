@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/releases"
 )
 
 // EnvStatus represents the live state of the Docker environment.
@@ -58,5 +59,20 @@ func checkStatus(composeDir string) tea.Cmd {
 			return msgStatusChecked{StatusStopped}
 		}
 		return msgStatusChecked{StatusRunning}
+	}
+}
+
+// msgLatestDevKit is sent when the release manifest has been fetched.
+type msgLatestDevKit struct{ manifest *releases.Manifest }
+
+// checkLatestDevKit fetches the release manifest in the background. Offline the menu
+// simply shows the installed version without an update hint.
+func checkLatestDevKit(manifestURL string) tea.Cmd {
+	return func() tea.Msg {
+		manifest, err := releases.Fetch(context.Background(), manifestURL)
+		if err != nil {
+			return nil
+		}
+		return msgLatestDevKit{manifest}
 	}
 }

@@ -40,7 +40,7 @@ var menuItems = []item{
 	{icon: "+", label: "Scaffold assignment", desc: "Create a new CTF assignment skeleton", cmd: "scaffold"},
 	{icon: "📁", label: "Set assignments repo", desc: "Choose where the public assignments repo is cloned", cmd: "config-assignments"},
 	{icon: "", label: "", desc: ""}, // separator
-	{icon: "↑", label: "Update payload", desc: "Pull latest Docker image from Docker Hub", cmd: "update"},
+	{icon: "↑", label: "Update DevKit", desc: "Update the DevKit environment to the latest version", cmd: "update"},
 	{icon: "↑", label: "Update CLI", desc: "Self-update the devkit binary", cmd: "self-update"},
 	{icon: "", label: "", desc: ""}, // separator
 	{icon: "✕", label: "Prune Docker", desc: "Remove ALL unused Docker data", cmd: "prune", danger: true},
@@ -54,6 +54,8 @@ type Model struct {
 	version    string
 	cursor     int
 	status     EnvStatus
+	latest     string // newest DevKit version from the manifest, "" until fetched
+	hasUpdate  bool   // latest is newer than the installed DevKit
 	composeDir string
 	quitting   bool
 	runCmd     string // set when user selects an item
@@ -78,7 +80,7 @@ func New(cfg config.Config, st state.State, version, composeDir string) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return checkStatus(m.composeDir)
+	return tea.Batch(checkStatus(m.composeDir), checkLatestDevKit(m.cfg.ManifestURL))
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -91,6 +93,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case msgStatusChecked:
 		m.status = msg.status
+		return m, nil
+
+	case msgLatestDevKit:
+		m.latest = msg.manifest.Payload.Version
+		if m.st.PayloadVersion != "" {
+			newer, err := msg.manifest.IsNewerPayload(m.st.PayloadVersion)
+			m.hasUpdate = err == nil && newer
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -159,7 +169,8 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	// Brand line
-	b.WriteString(styleBold.Render("  "+m.cfg.Brand+" DevKit") + "  " + styleMuted.Render("v"+m.version) + "\n")
+	b.WriteString(styleBold.Render("  "+m.cfg.Brand+" DevKit") + "  " + styleMuted.Render("CLI "+formatVersion(m.version)) + "\n")
+	b.WriteString("  " + m.devKitVersionLine() + "\n")
 
 	// Status pill
 	b.WriteString("  " + m.status.Label())
@@ -188,6 +199,9 @@ func (m Model) View() string {
 
 		label := it.label
 		desc := it.desc
+		if it.cmd == "update" && m.hasUpdate {
+			label += " → " + formatVersion(m.latest)
+		}
 
 		if selected {
 			labelStr := fmt.Sprintf(" %s  %-28s", icon, label)
@@ -214,7 +228,11 @@ func (m Model) View() string {
 
 	// ── Description of selected item ─────────────────────────────────────────
 	if m.cursor < len(menuItems) && menuItems[m.cursor].cmd != "" {
-		b.WriteString(styleMuted.Render("  → " + menuItems[m.cursor].desc))
+		desc := menuItems[m.cursor].desc
+		if menuItems[m.cursor].cmd == "update" {
+			desc = m.updateDesc()
+		}
+		b.WriteString(styleMuted.Render("  → " + desc))
 		b.WriteString("\n\n")
 	}
 
@@ -228,6 +246,34 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	return b.String()
+}
+
+// devKitVersionLine shows the installed DevKit version and, when known, the newer one.
+func (m Model) devKitVersionLine() string {
+	if m.st.PayloadVersion == "" {
+		return styleMuted.Render("DevKit not installed yet")
+	}
+	installed := styleWhite.Render("DevKit " + formatVersion(m.st.PayloadVersion))
+	switch {
+	case m.hasUpdate:
+		return installed + "  " + styleYellow.Render("update available: "+formatVersion(m.latest))
+	case m.latest != "":
+		return installed + "  " + styleMuted.Render("(latest)")
+	default:
+		return installed
+	}
+}
+
+// updateDesc explains what the update item will do for the current versions.
+func (m Model) updateDesc() string {
+	switch {
+	case m.hasUpdate:
+		return "Update DevKit " + formatVersion(m.st.PayloadVersion) + " → " + formatVersion(m.latest)
+	case m.latest != "" && m.st.PayloadVersion != "":
+		return "DevKit is up to date (" + formatVersion(m.st.PayloadVersion) + ")"
+	default:
+		return menuItems[m.cursor].desc
+	}
 }
 
 // Run launches the TUI and blocks until the user selects an item or quits.

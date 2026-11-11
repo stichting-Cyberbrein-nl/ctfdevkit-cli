@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/config"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
-	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/payload"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/releases"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/state"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/tui"
@@ -73,9 +73,12 @@ func ensureUpToDate(cmd *cobra.Command) error {
 	}
 
 	if wantsPayload {
-		applyPayloadUpdate(ctx, &s, manifest)
+		applyPayloadUpdate(ctx, &cfg, &s, manifest)
 	}
 
+	// The command reads config and state from its context; hand it the updated copies
+	// so `setup` installs the version just pulled instead of the stale one.
+	cmd.SetContext(withState(withConfig(ctx, cfg), s))
 	return nil
 }
 
@@ -133,21 +136,25 @@ func applyCLIUpdate(ctx context.Context, manifest *releases.Manifest) error {
 	return errRestartRequired
 }
 
-// applyPayloadUpdate pulls a newer Docker image. A failure here is reported but not fatal:
-// the existing payload still works, so `up` should continue with what is installed.
-func applyPayloadUpdate(ctx context.Context, s *state.State, manifest *releases.Manifest) {
+// applyPayloadUpdate pulls a newer DevKit image. A failure here is reported but not fatal:
+// the installed version still works, so `up` should continue with what is installed.
+func applyPayloadUpdate(ctx context.Context, cfg *config.Config, s *state.State, manifest *releases.Manifest) {
 	newer, err := manifest.IsNewerPayload(s.PayloadVersion)
 	if err != nil || !newer {
 		return
 	}
 
-	output.Infof("New payload available: %s → %s", s.PayloadVersion, manifest.Payload.Version)
-	if err := payload.Update(ctx, s, manifest.Payload); err != nil {
-		output.Warnf("Payload update failed, current version remains active: %v", err)
+	if s.PayloadVersion == "" {
+		output.Infof("Downloading DevKit v%s...", manifest.Payload.Version)
+	} else {
+		output.Infof("New DevKit version available: v%s → v%s", s.PayloadVersion, manifest.Payload.Version)
+	}
+	if err := installDevKitVersion(ctx, cfg, s, manifest.Payload); err != nil {
+		output.Warnf("DevKit update failed, current version remains active: %v", err)
 		return
 	}
 
-	output.Successf("Payload updated to v%s", manifest.Payload.Version)
+	output.Successf("DevKit updated to v%s", manifest.Payload.Version)
 }
 
 // isInteractive reports whether stdin is a terminal we can prompt on.

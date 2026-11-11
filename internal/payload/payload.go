@@ -98,19 +98,20 @@ func EnsureInstalled(ctx context.Context, s *state.State, payloadVersion string)
 	return state.Save(*s)
 }
 
-// Update pulls the new Docker image and updates the compose file.
+// Update pulls the new Docker image and, when the payload is installed, points
+// docker-compose.yml at it. Before `devkit setup` has run there is no compose file
+// yet; setup extracts it later with the configured version.
 func Update(ctx context.Context, s *state.State, rel releases.PayloadRelease) error {
 	output.Infof("Pulling image %s...", rel.Image)
 	if err := docker.Pull(ctx, rel.Image); err != nil {
 		return fmt.Errorf("docker pull failed: %w", err)
 	}
 
-	payloadDir, err := platform.PayloadDir()
-	if err != nil {
-		return err
+	if !s.IsPayloadInstalled() {
+		return nil
 	}
 
-	if err := UpdateImage(payloadDir, rel.Image); err != nil {
+	if err := UpdateImage(s.PayloadPath, rel.Image); err != nil {
 		return fmt.Errorf("updating docker-compose image tag: %w", err)
 	}
 

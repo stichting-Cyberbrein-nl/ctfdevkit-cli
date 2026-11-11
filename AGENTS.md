@@ -154,7 +154,7 @@ Override with env var `DEVKIT_MANIFEST_URL` or `--manifest-url` flag.
 | `devkit certs` | Regenerate TLS certificates |
 | `devkit bind-hosts` | Update /etc/hosts entry |
 | `devkit self-update` | Update the CLI binary |
-| `devkit update` | Pull the latest Docker payload image |
+| `devkit update` | Update the DevKit environment (Docker image) to the latest version and restart it if running |
 | `devkit version` | Show current version |
 
 ---
