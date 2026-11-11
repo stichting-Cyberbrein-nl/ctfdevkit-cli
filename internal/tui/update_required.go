@@ -4,12 +4,12 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type requiredUpdateModel struct {
 	current  string
 	latest   string
+	width    int
 	accepted bool
 	quitting bool
 }
@@ -20,6 +20,8 @@ func (m requiredUpdateModel) Init() tea.Cmd {
 
 func (m requiredUpdateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter, tea.KeySpace:
@@ -39,19 +41,12 @@ func (m requiredUpdateModel) View() string {
 		return ""
 	}
 
-	var b strings.Builder
-	b.WriteString("\n")
-	b.WriteString(styleYellow.Render("  Update available! ("+formatVersion(m.current)+") -> ("+formatVersion(m.latest)+")") + "\n")
-	b.WriteString(styleMuted.Render("  You need to update before you can continue using DevKit.") + "\n\n")
-
-	row := styleItemSelected.Width(52).Render("  Update now")
-	panel := stylePanel.Width(56).Render(row)
-	b.WriteString(lipgloss.NewStyle().PaddingLeft(2).Render(panel))
-	b.WriteString("\n\n")
-
-	b.WriteString("  " + styleKey.Render("enter") + styleHint.Render(" update now"))
-	b.WriteString("\n")
-	return b.String()
+	body := "DevKit CLI " + styleMuted.Render(formatVersion(m.current)+" → ") +
+		styleTitle.Render(formatVersion(m.latest)) + "\n\n" +
+		styleMuted.Render("You need to update before you can continue using DevKit.") + "\n\n" +
+		styleButton.Background(colorYellow).Render("Update now")
+	return renderDialog(m.width, colorYellow, "Update required", body,
+		keyHints("enter", "update now", "esc", "cancel"))
 }
 
 // AskRequiredUpdate blocks the normal TUI behind a required update prompt.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 )
@@ -26,19 +27,58 @@ func init() {
 	}
 }
 
+var bannerLines = []string{
+	"██████╗ ███████╗██╗   ██╗██╗  ██╗██╗████████╗",
+	"██╔══██╗██╔════╝██║   ██║██║ ██╔╝██║╚══██╔══╝",
+	"██║  ██║█████╗  ██║   ██║█████╔╝ ██║   ██║   ",
+	"██║  ██║██╔══╝  ╚██╗ ██╔╝██╔═██╗ ██║   ██║   ",
+	"██████╔╝███████╗ ╚████╔╝ ██║  ██╗██║   ██║   ",
+	"╚═════╝ ╚══════╝  ╚═══╝  ╚═╝  ╚═╝╚═╝   ╚═╝   ",
+}
+
+// bannerLetterWidths are the rune widths of D, E, V, K, I and T in bannerLines.
+var bannerLetterWidths = []int{8, 8, 9, 8, 3, 9}
+
+// IsChristmasSeason reports whether the banners use the Christmas theme
+// (November and December), so it switches off by itself in January.
+func IsChristmasSeason(now time.Time) bool {
+	return now.Month() == time.November || now.Month() == time.December
+}
+
 // Banner prints the branded devkit header.
 func Banner(brand, version string) {
 	fmt.Println()
-	cyan.Printf("  ██████╗ ███████╗██╗   ██╗██╗  ██╗██╗████████╗\n")
-	cyan.Printf("  ██╔══██╗██╔════╝██║   ██║██║ ██╔╝██║╚══██╔══╝\n")
-	cyan.Printf("  ██║  ██║█████╗  ██║   ██║█████╔╝ ██║   ██║   \n")
-	cyan.Printf("  ██║  ██║██╔══╝  ╚██╗ ██╔╝██╔═██╗ ██║   ██║   \n")
-	cyan.Printf("  ██████╔╝███████╗ ╚████╔╝ ██║  ██╗██║   ██║   \n")
-	cyan.Printf("  ╚═════╝ ╚══════╝  ╚═══╝  ╚═╝  ╚═╝╚═╝   ╚═╝   \n")
+	if IsChristmasSeason(time.Now()) {
+		faint.Println("  *   .  ❄    *    .   ❄   .    *    ❄   .  *")
+		for _, line := range bannerLines {
+			printChristmasLine(line)
+		}
+	} else {
+		for _, line := range bannerLines {
+			cyan.Printf("  %s\n", line)
+		}
+	}
 	fmt.Println()
 	bold.Printf("  %s DevKit  ", brand)
 	faint.Printf("v%s\n", version)
 	fmt.Println()
+}
+
+// printChristmasLine colors the banner letters alternately red and green.
+func printChristmasLine(line string) {
+	runes := []rune(line)
+	fmt.Print("  ")
+	pos := 0
+	for i, w := range bannerLetterWidths {
+		letter := string(runes[pos : pos+w])
+		if i%2 == 0 {
+			red.Print(letter)
+		} else {
+			green.Print(letter)
+		}
+		pos += w
+	}
+	fmt.Println(string(runes[pos:]))
 }
 
 // Step prints a numbered step indicator.

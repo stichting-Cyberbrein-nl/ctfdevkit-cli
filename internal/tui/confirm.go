@@ -1,15 +1,13 @@
 package tui
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type confirmModel struct {
 	title     string
 	subtitle  string
+	width     int
 	confirmed bool
 	quitting  bool
 }
@@ -20,6 +18,8 @@ func (m confirmModel) Init() tea.Cmd {
 
 func (m confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter, tea.KeySpace:
@@ -39,21 +39,9 @@ func (m confirmModel) View() string {
 		return ""
 	}
 
-	var b strings.Builder
-	b.WriteString("\n")
-	b.WriteString(styleAccent.Render("  "+m.title) + "\n")
-	b.WriteString(styleMuted.Render("  "+m.subtitle) + "\n\n")
-
-	row := styleItemSelected.Width(52).Render("  Continue")
-	panel := stylePanel.Width(56).Render(row)
-	b.WriteString(lipgloss.NewStyle().PaddingLeft(2).Render(panel))
-	b.WriteString("\n\n")
-
-	b.WriteString("  " + styleKey.Render("enter") + styleHint.Render(" continue") +
-		styleMuted.Render("  ·  ") +
-		styleKey.Render("esc") + styleHint.Render(" cancel"))
-	b.WriteString("\n")
-	return b.String()
+	body := styleMuted.Render(m.subtitle) + "\n\n" + styleButton.Render("Continue")
+	return renderDialog(m.width, colorAccent, m.title, body,
+		keyHints("enter", "continue", "esc", "cancel"))
 }
 
 func AskConfirm(title, subtitle string) (bool, error) {

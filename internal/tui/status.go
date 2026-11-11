@@ -20,20 +20,21 @@ const (
 	StatusDockerDown
 )
 
+// Label renders the status as a colored badge.
 func (s EnvStatus) Label() string {
 	switch s {
 	case StatusChecking:
-		return "  checking…"
+		return styleMuted.Render("checking…")
 	case StatusRunning:
-		return statusRunning.Render(" ● RUNNING ")
+		return stylePill.Background(colorGreen).Render("● RUNNING")
 	case StatusStopped:
-		return statusStopped.Render(" ○ STOPPED ")
+		return stylePill.Background(colorYellow).Render("○ STOPPED")
 	case StatusDockerDown:
-		return statusUnknown.Render(" ⚠ DOCKER DOWN ")
+		return stylePill.Background(colorRed).Render("DOCKER DOWN")
 	case StatusNotInstalled:
-		return statusUnknown.Render(" ✗ NOT INSTALLED ")
+		return stylePill.Background(colorMuted).Render("NOT INSTALLED")
 	default:
-		return statusUnknown.Render(" ? UNKNOWN ")
+		return stylePill.Background(colorMuted).Render("UNKNOWN")
 	}
 }
 

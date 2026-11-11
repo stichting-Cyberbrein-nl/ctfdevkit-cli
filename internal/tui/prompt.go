@@ -1,14 +1,15 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
+
+// promptPrefix is the input marker; the textinput width excludes it.
+const promptPrefix = "❯ "
 
 // promptModel is a Bubble Tea model for a single-field path input.
 type promptModel struct {
@@ -18,6 +19,7 @@ type promptModel struct {
 	detected  string // pre-filled suggested path
 	confirmed string // set when user presses Enter
 	err       string
+	width     int
 	quitting  bool
 }
 
@@ -26,8 +28,9 @@ func newPromptModel(title, subtitle, placeholder, detected string) promptModel {
 	ti.Placeholder = placeholder
 	ti.Focus()
 	ti.CharLimit = 512
-	ti.Width = 52
-	ti.Prompt = styleAccent.Render("  ❯ ")
+	ti.Width = promptInputWidth(0)
+	ti.Prompt = styleAccent.Render(promptPrefix)
+	ti.PlaceholderStyle = styleMuted
 
 	if detected != "" {
 		ti.SetValue(detected)
@@ -41,12 +44,22 @@ func newPromptModel(title, subtitle, placeholder, detected string) promptModel {
 	}
 }
 
+// promptInputWidth leaves room for the prefix and the cursor inside the card.
+func promptInputWidth(termWidth int) int {
+	return dialogInnerWidth(termWidth) - len([]rune(promptPrefix)) - 1
+}
+
 func (m promptModel) Init() tea.Cmd {
 	return textinput.Blink
 }
 
 func (m promptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.input.Width = promptInputWidth(msg.Width)
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
@@ -88,31 +101,22 @@ func (m promptModel) View() string {
 	}
 
 	var b strings.Builder
-	b.WriteString("\n")
-	b.WriteString(styleAccent.Render("  "+m.title) + "\n")
-	b.WriteString(styleMuted.Render("  "+m.subtitle) + "\n\n")
+	b.WriteString(styleMuted.Render(m.subtitle) + "\n\n")
 
+	escHint := "cancel"
 	if m.detected != "" {
-		detected := lipgloss.NewStyle().
-			Foreground(colorGreen).
-			Render(fmt.Sprintf("  ✓ Suggested path: %s", m.detected))
-		b.WriteString(detected + "\n")
-		b.WriteString(styleMuted.Render("  Press Enter to use it, or type a different path.") + "\n\n")
+		b.WriteString(styleGreen.Render("✓ Suggested: "+m.detected) + "\n")
+		b.WriteString(styleMuted.Render("Press Enter to use it, or type a different path.") + "\n\n")
+		escHint = "use suggestion"
 	}
 
-	box := stylePanel.Width(56).Render(m.input.View())
-	b.WriteString(lipgloss.NewStyle().PaddingLeft(2).Render(box) + "\n\n")
-
+	b.WriteString(m.input.View())
 	if m.err != "" {
-		b.WriteString(styleRed.Render("  ✗ "+m.err) + "\n\n")
+		b.WriteString("\n" + styleRed.Render("✗ "+m.err))
 	}
 
-	b.WriteString("  " + styleKey.Render("enter") + styleHint.Render(" confirm") +
-		styleMuted.Render("  ·  ") +
-		styleKey.Render("esc") + styleHint.Render(" use suggestion"))
-	b.WriteString("\n")
-
-	return b.String()
+	return renderDialog(m.width, colorAccent, m.title, b.String(),
+		keyHints("enter", "confirm", "esc", escHint))
 }
 
 // AskAssignmentsPath shows an interactive prompt to choose where DevKit places the assignments repo.
