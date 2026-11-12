@@ -137,6 +137,13 @@ func Generate(certDir, domain, bindIP string, force bool, plat platform.Platform
 		}
 	}
 
+	if plat.OS == platform.OSLinux {
+		if err := EnsureFirefoxTrust(); err != nil {
+			output.Warnf("Could not configure Firefox to trust the certificate: %v", err)
+			output.Hintf("Firefox will refuse https://%s until it trusts the mkcert CA; re-run: devkit certs", domain)
+		}
+	}
+
 	if plat.OS == platform.OSWindows || plat.IsWSL {
 		if err := SyncWindowsTrust(); err != nil {
 			output.Warnf("Could not sync CA to Windows trust store: %v", err)
