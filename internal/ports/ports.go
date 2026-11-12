@@ -4,6 +4,7 @@ package ports
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -36,12 +37,45 @@ func IsInUse(port int) bool {
 
 // IsInUseOnHost returns true if a TCP listener is bound to host:port.
 func IsInUseOnHost(host string, port int) bool {
-	ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
-	if err != nil {
-		return true
+	err := tryBind(host, port)
+	if err == nil {
+		return false
 	}
-	ln.Close()
-	return false
+	// A denied bind says nothing about whether the port is taken: the Docker daemon publishes
+	// it as root. Probe for an actual listener instead.
+	if isBindDenied(err) {
+		return hasListener(host, port)
+	}
+	return true
+}
+
+// tryBind briefly listens on host:port and reports why that failed, if it did.
+func tryBind(host string, port int) error {
+	ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	if err == nil {
+		ln.Close()
+	}
+	return err
+}
+
+// isBindDenied reports whether err is Unix refusing an unprivileged user a port below
+// net.ipv4.ip_unprivileged_port_start (1024 by default). On Windows a denied bind means the
+// port sits in an excluded range that Docker cannot use either, so it counts as taken.
+func isBindDenied(err error) bool {
+	return err != nil && runtime.GOOS != "windows" && errors.Is(err, os.ErrPermission)
+}
+
+// hasListener reports whether something accepts TCP connections on host:port.
+func hasListener(host string, port int) bool {
+	if host == "" || host == "0.0.0.0" {
+		host = "127.0.0.1"
+	}
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
 
 // FindFreePort tries the preferred port first; if unavailable (or unreleasable),
@@ -52,6 +86,13 @@ func FindFreePort(ctx context.Context, preferred int, plat platform.Platform) (i
 
 // FindFreePortForBindIP tries the preferred port on a specific bind IP.
 func FindFreePortForBindIP(ctx context.Context, preferred int, bindIP string, plat platform.Platform) (int, error) {
+	// Rootless Docker has this user's privileges: a port this process may not bind, the
+	// daemon cannot publish either, however free it is.
+	if isBindDenied(tryBind(bindIP, preferred)) && docker.IsRootless(ctx) {
+		output.Warnf("Rootless Docker cannot publish port %d", preferred)
+		return alternativePort(preferred, bindIP)
+	}
+
 	if !IsInUseOnHost(bindIP, preferred) {
 		return preferred, nil
 	}
@@ -66,10 +107,14 @@ func FindFreePortForBindIP(ctx context.Context, preferred int, bindIP string, pl
 		return preferred, nil
 	}
 
-	alternatives := alternativesFor(preferred)
-	for _, p := range alternatives {
+	return alternativePort(preferred, bindIP)
+}
+
+// alternativePort returns the first free fallback for preferred, or a random free port.
+func alternativePort(preferred int, bindIP string) (int, error) {
+	for _, p := range alternativesFor(preferred) {
 		if !IsInUseOnHost(bindIP, p) {
-			output.Warnf("Port %d busy - using port %d instead", preferred, p)
+			output.Warnf("Port %d unavailable - using port %d instead", preferred, p)
 			return p, nil
 		}
 	}
@@ -80,7 +125,7 @@ func FindFreePortForBindIP(ctx context.Context, preferred int, bindIP string, pl
 	}
 	p := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
-	output.Warnf("Port %d busy - using random port %d", preferred, p)
+	output.Warnf("Port %d unavailable - using random port %d", preferred, p)
 	return p, nil
 }
 

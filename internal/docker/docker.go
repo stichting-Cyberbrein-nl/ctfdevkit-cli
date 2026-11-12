@@ -48,6 +48,13 @@ func IsPermissionError(infoOutput string) bool {
 		(strings.Contains(lower, "docker.sock") || strings.Contains(lower, "/var/run/docker"))
 }
 
+// IsRootless reports whether the Docker daemon runs in rootless mode, where it cannot
+// publish ports the current user may not bind.
+func IsRootless(ctx context.Context) bool {
+	out, err := exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").Output()
+	return err == nil && strings.Contains(string(out), "name=rootless")
+}
+
 // WaitForDaemon polls the Docker daemon until it responds or the context expires.
 func WaitForDaemon(ctx context.Context) error {
 	output.Info("Waiting for Docker daemon...")
