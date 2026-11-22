@@ -23,6 +23,7 @@ func newAssignmentsCmd() *cobra.Command {
 		newAssignmentsStatusCmd(),
 		newAssignmentsUpdateCmd(),
 		newAssignmentsSetPathCmd(),
+		newAssignmentsUploadCmd(),
 	)
 
 	return cmd

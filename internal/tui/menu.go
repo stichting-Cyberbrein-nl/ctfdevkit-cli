@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/config"
+	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/ctfnet"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/output"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/state"
 )
@@ -43,6 +44,9 @@ var menuItems = []item{
 	{group: "Develop", label: "New assignment", desc: "Create an assignment in the house style", cmd: "assignments", args: []string{"new"}},
 	{group: "Develop", label: "Validate assignments", desc: "Check all assignments against the platform", cmd: "assignments", args: []string{"validate"}},
 	{group: "Develop", label: "Set assignments repo", desc: "Where the assignments repo is cloned", cmd: "config-assignments"},
+
+	{group: "Platform", label: "Upload assignment", desc: "Publish on ctf.cyberbrein.net", cmd: "assignments", args: []string{"upload"}},
+	{group: "Platform", label: "Platform login", desc: "Log in with your platform account", cmd: "login"},
 
 	{group: "AI tools", label: "Connect AI tools", desc: "Install the DevKit MCP server in your AI tools", cmd: "mcp", args: []string{"install"}},
 	{group: "AI tools", label: "AI tools status", desc: "Show connected AI tools and test the server", cmd: "mcp", args: []string{"status"}},
@@ -87,11 +91,12 @@ type Model struct {
 	runArgs    []string
 	width      int
 	height     int
+	account    string // "@username" when logged in to the configured platform
 }
 
 // New creates the initial TUI model.
 func New(cfg config.Config, st state.State, version, composeDir string) Model {
-	return Model{
+	m := Model{
 		cfg:        cfg,
 		st:         st,
 		version:    version,
@@ -99,6 +104,10 @@ func New(cfg config.Config, st state.State, version, composeDir string) Model {
 		spinner:    spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(styleAccent)),
 		composeDir: composeDir,
 	}
+	if creds, err := ctfnet.LoadCredentials(); err == nil && creds.PlatformURL == strings.TrimRight(cfg.PlatformURL, "/") {
+		m.account = "@" + creds.User.Username
+	}
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -351,6 +360,8 @@ func (m Model) devKitVersion() string {
 // itemDesc is the description of a menu item for the current config and versions.
 func (m Model) itemDesc(it item) string {
 	switch {
+	case it.cmd == "login" && m.account != "":
+		return "Logged in as " + m.account
 	case it.cmd == "open" && m.cfg.URL != "":
 		return "Open " + m.cfg.URL + " in your browser"
 	case it.cmd == "update" && m.hasUpdate:

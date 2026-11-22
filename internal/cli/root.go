@@ -120,6 +120,8 @@ func init() {
 		newVersionCmd(),
 		newAssignmentsCmd(),
 		newConfigAssignmentsCmd(),
+		newLoginCmd(),
+		newLogoutCmd(),
 	)
 }
 

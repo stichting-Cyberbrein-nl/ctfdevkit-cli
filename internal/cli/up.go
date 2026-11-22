@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/stichting-Cyberbrein-nl/ctfdevkit-cli/internal/docker"
@@ -39,9 +38,9 @@ func newUpCmd() *cobra.Command {
 			}
 
 			appURL := buildURL(cfg.Domain, pair.HTTPS)
-			assignmentsPath := cfg.AssignmentsPath
-			if assignmentsPath == "" {
-				assignmentsPath = filepath.Join(composeDir, "assignments")
+			assignmentsPath, err := localAssignmentsPath(cfg, s)
+			if err != nil {
+				return err
 			}
 			if err := payload.WriteComposeEnv(composeDir, payload.ComposeEnv{BindIP: bindIP, HTTPPort: pair.HTTP, HTTPSPort: pair.HTTPS, AppURL: appURL, AssignmentsPath: assignmentsPath}); err != nil {
 				return err

@@ -42,6 +42,7 @@ internal/
   assignments/              Assignments repo clone/update + assignment counting
   browser/                  Opens URLs in the default browser
   certs/                    mkcert install + TLS cert generation
+  ctfnet/                   ctf.cyberbrein.net client: OAuth device login, credentials, assignment zip + upload
   cli/                      All Cobra commands (one file per command)
   config/                   config.json loader/saver + env overrides
   docker/                   Docker daemon detection, compose helpers
@@ -155,6 +156,9 @@ Override with env var `DEVKIT_MANIFEST_URL` or `--manifest-url` flag.
 | `devkit assignments new [title]` | Create an assignment in the house style (`--language nl\|en`, `--category`, `--difficulty`, `--number`) |
 | `devkit assignments validate [name]` | Validate assignments against the platform rules (`--strict`) |
 | `devkit assignments check <name>` | Platform rules + house style + smoke test (`--no-smoke`) |
+| `devkit assignments upload [name]` | Zip an assignment and publish it on ctf.cyberbrein.net (`--skip-check`; logs in when needed) |
+| `devkit login` | Log in to ctf.cyberbrein.net (OAuth device login in the browser) |
+| `devkit logout` | Forget the stored ctf.cyberbrein.net login |
 | `devkit mcp install [client...]` | Register the DevKit MCP server in AI tools (`claude`, `codex`, `copilot`, `cursor`, `gemini`; `--all`) |
 | `devkit mcp uninstall [client...]` | Remove the MCP server from AI tools (`--all`) |
 | `devkit mcp status` | Show connected AI tools and test the MCP server |

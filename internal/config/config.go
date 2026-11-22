@@ -23,7 +23,9 @@ type Config struct {
 	DockerImage        string `json:"docker_image"`
 	ManifestURL        string `json:"manifest_url"`
 	AssignmentsRepoURL string `json:"assignments_repo_url"`
-	AssignmentsPath    string `json:"assignments_path"` // empty = use payload dir ./assignments
+	AssignmentsPath    string `json:"assignments_path"`   // empty = use payload dir ./assignments
+	PlatformURL        string `json:"platform_url"`       // ctf.cyberbrein.net platform for uploads (not the local DevKit)
+	PlatformClientID   string `json:"platform_client_id"` // OAuth client id of the DevKit CLI on the platform
 }
 
 // Default returns the factory default configuration.
@@ -39,6 +41,8 @@ func Default() Config {
 		DockerImage:        "sympactdev/ctfdevkit",
 		ManifestURL:        "https://raw.githubusercontent.com/stichting-Cyberbrein-nl/ctfdevkit-cli/main/manifest.json",
 		AssignmentsRepoURL: "https://github.com/stichting-Cyberbrein-nl/assignments",
+		PlatformURL:        "https://ctf.cyberbrein.net",
+		PlatformClientID:   "7f3c2a1e-9b4d-4e6f-8a2b-1c5d9e0f3a7b",
 	}
 }
 
@@ -116,6 +120,12 @@ func applyEnv(cfg Config) Config {
 	}
 	if v := os.Getenv("DEVKIT_ASSIGNMENTS_PATH"); v != "" {
 		cfg.AssignmentsPath = v
+	}
+	if v := os.Getenv("DEVKIT_PLATFORM_URL"); v != "" {
+		cfg.PlatformURL = v
+	}
+	if v := os.Getenv("DEVKIT_PLATFORM_CLIENT_ID"); v != "" {
+		cfg.PlatformClientID = v
 	}
 	return cfg
 }
